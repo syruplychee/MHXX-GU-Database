@@ -1583,7 +1583,8 @@ const server = http.createServer(async (req, res) => {
     if (!filePath.startsWith(PUBLIC_DIR + path.sep) && filePath !== path.join(PUBLIC_DIR, 'index.html')) {
       return res.writeHead(403).end();
     }
-    return serveFile(res, filePath, url.pathname !== '/');
+    // Load the HTML, JavaScript, and CSS together after each local update.
+    return serveFile(res, filePath, false);
   } catch (err) {
     console.error(err);
     json(res, 500, { error: String(err && err.message ? err.message : err) });
