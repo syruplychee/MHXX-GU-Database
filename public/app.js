@@ -50,15 +50,6 @@ const elementChip = (name, pt) => {
   return `<span class="chip" style="color:${color};border-color:${color}55;background:${color}14">${esc(name)} ${pt}</span>`;
 };
 
-const elemColor = (name) =>
-  !name || name === '---' ? '#9aa3af'
-    : /火|Fire/i.test(name) ? ELEM_COLORS.fire
-    : /水|Wat/i.test(name) ? ELEM_COLORS.water
-    : /雷|Thun/i.test(name) ? ELEM_COLORS.thunder
-    : /冰|Ice/i.test(name) ? ELEM_COLORS.ice
-    : /龙|Dra/i.test(name) ? ELEM_COLORS.dragon
-    : '#9aa3af';
-
 const tag = (text, cls = '') => `<span class="tag ${cls}">${esc(text)}</span>`;
 const chip = (text, cls = '') => `<span class="chip ${cls}">${esc(text)}</span>`;
 const skillChips = (list) =>
@@ -128,8 +119,7 @@ function setRoute(path, params = {}) {
 
 function navActive(parts) {
   let active = 'home';
-  if (parts[0] === 'weapons' && parts[1] === 'tree') active = 'weapon-tree';
-  else if (parts[0] === 'palico') active = 'palico';
+  if (parts[0] === 'palico') active = 'palico';
   else if (parts[0]) active = parts[0];
   $$('#nav a').forEach((a) => a.classList.toggle('active', a.dataset.route === active));
 }
@@ -158,8 +148,10 @@ async function route() {
     switch (parts[0]) {
       case 'items': return parts[1] ? go((c) => itemPage(c, +parts[1])) : go(itemsPage);
       case 'weapons':
-        if (parts[1] === 'tree') return go(weaponsTreePage);
-        return parts[1] ? go((c) => weaponPage(c, +parts[1])) : go(weaponsPage);      case 'armor': return parts[1] ? go((c) => armorDetailPage(c, +parts[1])) : go(armorListPage);
+        if (parts[1] === 'tree' && params.view === 'list') return go(weaponsTreeListPage);
+        if (!parts[1] || parts[1] === 'tree') return go(weaponForgePage);
+        return go((c) => weaponPage(c, +parts[1]));
+      case 'armor': return parts[1] ? go((c) => armorDetailPage(c, +parts[1])) : go(armorListPage);
       case 'skills': return parts[1] ? go((c) => skillPage(c, +parts[1])) : go(skillsPage);
       case 'jewels': return parts[1] ? go((c) => jewelPage(c, +parts[1])) : go(jewelsPage);
       case 'quests': return parts[1] ? go((c) => questPage(c, +parts[1])) : go(questsPage);
@@ -422,24 +414,6 @@ function itemsPage({ params, token }) {
   });
 }
 
-function weaponsPage({ params, token }) {
-  const types = (S.meta.weaponTypes || []).map((t) => [t.id, t.name]);
-  return listPage({
-    params, token, eyebrow: 'Weapons', title: '武器', sub: '14 种武器 · 攻击 / 属性 / 锋利度 / 派生素材',
-    filters: [filterSearch(params), filterSelect('type', '类型', types, params), filterSelect('rarity', '稀有度', Array.from({ length: 10 }, (_, i) => [i + 1, 'R' + (i + 1)]), params)],
-    fetch: (p) => api('/weapons', { q: p.q, type: p.type, rarity: p.rarity, page: p.page }),
-    href: (r) => `#/weapons/${r.id}`,
-    columns: [
-      { label: '武器', render: (r) => `<div class="cell-name">${typeIcon(r.type)}<span><span class="nm">${esc(r.name)}</span><span class="sub">${esc(weaponTypeName(r.type))}</span></span></div>` },
-      { label: '攻击', cls: 'num', render: (r) => num(r.atk) },
-      { label: '会心', cls: 'num', render: (r) => (r.aff ? `${r.aff}%` : '0%') },
-      { label: '属性', render: (r) => (r.el1 > 0 ? elementChip(r.el1name, r.el1pt) : '<span class="dim">无</span>') },
-      { label: '孔', cls: 'num', render: (r) => (r.slot ? '◉'.repeat(r.slot) : '<span class="dim">—</span>') },
-      { label: '稀有', cls: 'num', render: (r) => rarity(r.rare) },
-    ],
-  });
-}
-
 async function weaponsTreeListPage({ params, token }) {
   const type = Number(params.type || 1);
   const tabs = (S.meta.weaponTypes || [])
@@ -532,265 +506,6 @@ async function weaponsTreeListPage({ params, token }) {
       $('#treeCount').textContent = `匹配 ${hits} 把武器`;
     }, 160);
   });
-}
-
-/* ============================================================ weapon tree (graph view) */
-
-const TREE_NODE = 44;
-const TREE_COL = 96;
-const TREE_ROW = 56;
-
-function weaponsTreePage(ctx) {
-  if (ctx.params.view === 'list') return weaponsTreeListPage(ctx);
-  return weaponsTreeGraphPage(ctx);
-}
-
-function layoutWeaponTree(root) {
-  let maxDepth = 0;
-  let maxRow = 0;
-  const nodes = [];
-  // First child continues on the parent row (the "spine"); extra branches are placed
-  // on fresh rows below the deepest row used so far, like the in-game derivation chart.
-  const walk = (n, depth, row) => {
-    maxDepth = Math.max(maxDepth, depth);
-    maxRow = Math.max(maxRow, row);
-    const node = {
-      id: n.id, name: n.name, rare: n.rare, atk: n.atk, img: n.img,
-      el1: n.el1, el1pt: n.el1pt, el1name: n.el1name, depth, y: row * TREE_ROW,
-    };
-    node.x = depth * TREE_COL;
-    nodes.push(node);
-    let deepest = row;
-    const kids = n.children || [];
-    if (kids.length) {
-      const first = walk(kids[0], depth + 1, row);
-      node.kids = [first.node];
-      deepest = Math.max(deepest, first.deepest);
-      for (let i = 1; i < kids.length; i++) {
-        const res = walk(kids[i], depth + 1, deepest + 1);
-        node.kids.push(res.node);
-        deepest = Math.max(deepest, res.deepest);
-      }
-    } else {
-      node.kids = [];
-    }
-    return { node, deepest };
-  };
-  const r = walk(root, 0, 0);
-  return {
-    root: r.node,
-    nodes,
-    width: maxDepth * TREE_COL + TREE_NODE + 20,
-    height: (maxRow + 1) * TREE_ROW,
-  };
-}
-
-function countTree(n) {
-  return 1 + (n.children || []).reduce((sum, c) => sum + countTree(c), 0);
-}
-
-async function weaponsTreeGraphPage({ params, token }) {
-  const type = Number(params.type || 1);
-  const tabs = (S.meta.weaponTypes || [])
-    .map((t) => `<a class="ttab ${t.id === type ? 'active' : ''}" href="#/weapons/tree?type=${t.id}">${ic(t.icon, 'img16')}<span>${esc(t.name)}</span></a>`)
-    .join('');
-  view.innerHTML = `
-    ${headHTML('Weapon Tree', '武器衍生图', '沿派生线横向展开：左侧选择派生线，点击节点在右侧查看详情')}
-    <div class="ttabs">${tabs}</div>
-    <div class="toolbar">
-      <label class="field grow"><span>高亮定位</span><input id="treeFilter" placeholder="输入武器名，匹配节点会高亮并自动滚动" /></label>
-      <label class="field"><span>派生线</span><select id="treeJump"><option value="">全部</option></select></label>
-      <a class="btn sm" href="#/weapons/tree?type=${type}&view=list">列表视图</a>
-      <button class="btn sm" id="treeZoomOut" title="缩小">－</button>
-      <button class="btn sm" id="treeZoomFit" title="缩放至适合宽度">适应宽度</button>
-      <button class="btn sm" id="treeZoomIn" title="放大">＋</button>
-      <span class="dim" id="treeZoomVal">100%</span>
-      <span class="dim" id="treeCount">加载中…</span>
-    </div>
-    <div class="tree-layout">
-      <div class="tree-canvas" id="treeCanvas"><div class="loading">加载中…</div></div>
-      <aside class="tree-side" id="treeSide"><div class="tside-empty"><b>武器详情</b><span>点击树上的节点查看</span></div></aside>
-    </div>`;
-
-  const data = await api('/weapons/tree', { type });
-  if (token !== routeToken) return;
-
-  const canvas = $('#treeCanvas');
-  const side = $('#treeSide');
-  const sections = data.roots.map((root) => ({ root, layout: layoutWeaponTree(root), count: countTree(root) }));
-  const totalNodes = sections.reduce((sum, s) => sum + s.count, 0);
-
-  $('#treeJump').insertAdjacentHTML(
-    'beforeend',
-    sections
-      .map((s) => `<option value="${s.root.id}">${esc(s.root.name.replace(/\s*-\s*Lv\.\d+$/, ''))} · ${s.count}</option>`)
-      .join('')
-  );
-
-  const sectionHTML = (s) => {
-    const { layout } = s;
-    const paths = [];
-    const walkEdges = (node) => {
-      for (const k of node.kids) {
-        const px = node.x + TREE_NODE;
-        const py = node.y + TREE_ROW / 2;
-        const cx = k.x;
-        const cy = k.y + TREE_ROW / 2;
-        const mid = cx - 22;
-        paths.push(`M ${px} ${py} H ${mid} V ${cy} H ${cx}`);
-        walkEdges(k);
-      }
-    };
-    walkEdges(layout.root);
-
-    const nodes = layout.nodes
-      .map((n) => {
-        const left = n.x + (TREE_COL - TREE_NODE) / 2;
-        const top = n.y + (TREE_ROW - TREE_NODE) / 2;
-        const fallback = `/icons/Wpn_${String(type).padStart(2, '0')}01`;
-        const art = `<img src="${n.img ? '/icons/' + encodeURIComponent(n.img) : fallback}" alt="" loading="lazy"
-          onerror="this.onerror=null;this.src='${fallback}'">`;
-        const dot = n.el1 > 0 ? `<i class="tdot" style="background:${elemColor(n.el1name)}"></i>` : '';
-        return `<a class="tnode-card" href="#/weapons/${n.id}" data-node-id="${n.id}" data-name="${esc(String(n.name).toLowerCase())}"
-          style="left:${left}px;top:${top}px;--rc:${RARITY[n.rare] || RARITY[0]}" title="${esc(n.name)} · 攻击 ${n.atk}">
-          ${art}${dot}
-        </a>`;
-      })
-      .join('');
-
-    const title = s.root.name.replace(/\s*-\s*Lv\.\d+$/, '');
-    return `<section class="tsection" id="root-${s.root.id}" data-root="${s.root.id}">
-      <div class="tsection-head"><span class="tbook">◈</span>${esc(title)} 衍生 <span class="dim">· ${s.count} 把</span></div>
-      <div class="tgraph" style="width:${layout.width}px;height:${layout.height}px">
-        <svg class="tedges" width="${layout.width}" height="${layout.height}">${paths.map((p) => `<path d="${p}"/>`).join('')}</svg>
-        ${nodes}
-      </div>
-    </section>`;
-  };
-
-  canvas.innerHTML = sections.map(sectionHTML).join('');
-  $('#treeCount').textContent = `${data.typeName} · ${sections.length} 条派生线 · ${totalNodes} 把武器`;
-
-  let zoom = 1;
-  const applyZoom = () => {
-    $$('.tgraph', canvas).forEach((g) => { g.style.zoom = zoom; });
-    $('#treeZoomVal').textContent = Math.round(zoom * 100) + '%';
-  };
-  const fitWidth = () => {
-    const maxWidth = Math.max(...sections.map((s) => s.layout.width));
-    const avail = canvas.clientWidth - 26;
-    zoom = Math.max(0.5, Math.min(1.15, avail / maxWidth));
-    applyZoom();
-  };
-  applyZoom();
-  $('#treeZoomOut').addEventListener('click', () => { zoom = Math.max(0.35, zoom / 1.12); applyZoom(); });
-  $('#treeZoomIn').addEventListener('click', () => { zoom = Math.min(1.6, zoom * 1.12); applyZoom(); });
-  $('#treeZoomFit').addEventListener('click', fitWidth);
-
-  $('#treeJump').addEventListener('change', (e) => {
-    const id = e.target.value;
-    if (!id) { canvas.scrollTop = 0; return; }
-    const sec = canvas.querySelector('#root-' + id);
-    if (sec) canvas.scrollTop = sec.offsetTop - 8;
-  });
-
-  let selectedCard = null;
-  const selectWeapon = async (id, card) => {
-    if (selectedCard) selectedCard.classList.remove('selected');
-    selectedCard = card;
-    card.classList.add('selected');
-    side.innerHTML = '<div class="loading">加载中…</div>';
-    try {
-      const d = await api('/weapons/' + id);
-      side.innerHTML = renderTreeSide(d);
-    } catch (err) {
-      side.innerHTML = `<div class="error">${esc(err.message)}</div>`;
-    }
-  };
-
-  canvas.addEventListener('click', (e) => {
-    const card = e.target.closest('[data-node-id]');
-    if (!card) return;
-    if (e.ctrlKey || e.metaKey || e.shiftKey) return;
-    e.preventDefault();
-    selectWeapon(Number(card.dataset.nodeId), card);
-  });
-
-  let timer = null;
-  $('#treeFilter').addEventListener('input', (e) => {
-    clearTimeout(timer);
-    timer = setTimeout(() => {
-      const q = e.target.value.trim().toLowerCase();
-      const cards = $$('.tnode-card', canvas);
-      cards.forEach((c) => c.classList.remove('match', 'dim'));
-      if (!q) {
-        $$('.tsection', canvas).forEach((s) => { s.hidden = false; });
-        $('#treeCount').textContent = `${data.typeName} · ${sections.length} 条派生线 · ${totalNodes} 把武器`;
-        return;
-      }
-      let hits = 0;
-      let first = null;
-      cards.forEach((c) => {
-        if (c.dataset.name.includes(q)) {
-          c.classList.add('match');
-          hits++;
-          if (!first) first = c;
-        } else {
-          c.classList.add('dim');
-        }
-      });
-      let sectionsHit = 0;
-      $$('.tsection', canvas).forEach((s) => {
-        const has = s.querySelector('.tnode-card.match');
-        s.hidden = !has;
-        if (has) sectionsHit++;
-      });
-      $('#treeCount').textContent = `匹配 ${hits} 把武器 · ${sectionsHit} 条派生线`;
-      if (first) {
-        const sec = first.closest('.tsection');
-        if (sec) canvas.scrollTop = sec.offsetTop - 8;
-      }
-    }, 160);
-  });
-}
-
-function renderTreeSide(d) {
-  const w = d.data;
-  const img = w.ImgFile ? `/icons/${encodeURIComponent(w.ImgFile)}` : '';
-  const mats = d.materials.length
-    ? d.materials
-        .map(
-          (m) => `<div class="tside-mat"><span>${m.kind === 'P' ? '生产' : '强化'}</span><a href="#/items/${m.id}">${esc(m.name)}</a><b>×${m.qty}</b></div>`
-        )
-        .join('')
-    : '<div class="dim">—</div>';
-  const rel = [
-    d.tree.parent ? `<a class="chip gold" href="#/weapons/${d.tree.parent.id}">↑ ${esc(d.tree.parent.name)}</a>` : '<span class="chip">树根武器</span>',
-    ...d.tree.children.map((c) => `<a class="chip" href="#/weapons/${c.id}">↓ ${esc(c.name)}</a>`),
-  ].join('');
-  return `
-    <div class="tside-hero">
-      <div class="tside-art">${img ? `<img src="${img}" alt="" onerror="this.style.visibility='hidden'">` : ''}</div>
-      <div>
-        <div class="tside-rarity" style="color:${RARITY[w.Rare] || 'var(--muted)'}">RARE ${w.Rare} · ${esc(weaponTypeName(w.Wpn_Type_ID))}</div>
-        <h3>${esc(w.name)}</h3>
-        <div class="dim">#${w.Wpn_ID}</div>
-      </div>
-    </div>
-    <div class="tside-stats">
-      <div><span>攻击力</span><b>${w.Atk}</b></div>
-      <div><span>会心率</span><b>${w.Affinity ? w.Affinity + '%' : '0%'}</b></div>
-      <div><span>属性</span><b>${w.SpAtk1_Pt > 0 ? esc(w.el1name) + ' ' + w.SpAtk1_Pt : '无'}</b></div>
-      <div><span>防御</span><b>${w.Def}</b></div>
-      <div><span>孔位</span><b>${w.Slot ? '◉'.repeat(w.Slot) : '—'}</b></div>
-      <div><span>稀有度</span><b>R${w.Rare}</b></div>
-    </div>
-    <div class="tside-sharp"><div class="tside-label">锋利度</div>${sharpnessBar(w.sharpness)}</div>
-    <div class="tside-label">素材</div>
-    ${mats}
-    <div class="tside-label">派生</div>
-    <div class="tside-rel">${rel}</div>
-    <a class="btn primary tside-open" href="#/weapons/${w.Wpn_ID}">打开完整页面</a>`;
 }
 
 function armorListPage({ params, token }) {
@@ -1101,18 +816,22 @@ async function itemPage({ token }, id) {
 
 /* ============================================================ weapon detail */
 
+function weaponSpecificStats(w) {
+  return [
+    ['瓶子', w.axename], ['炮击类型', w.glname],
+    ['装填速度', w.reloadname], ['稳定度', w.steadyname], ['后坐力', w.recoilname],
+    ['弓射击', w.bowname], ['射击1', w.bow1name], ['射击2', w.bow2name], ['射击3', w.bow3name], ['射击4', w.bow4name],
+    ['猎虫类型', w.kinname],
+  ].filter(([, value]) => value && !['---', '0', -1].includes(value));
+}
+
 async function weaponPage({ token }, id) {
   view.innerHTML = `<div class="loading">加载中…</div>`;
   const d = await api(`/weapons/${id}`);
   if (token !== routeToken) return;
   const w = d.data;
   const img = w.ImgFile ? `/icons/${encodeURIComponent(w.ImgFile)}` : '';
-  const params = [];
-  const push = (k, v) => { if (v && v !== '---' && v !== '0' && v !== 0 && v !== -1) params.push([k, v]); };
-  push('瓶子', w.axename); push('炮击类型', w.glname);
-  push('装填速度', w.reloadname); push('稳定度', w.steadyname); push('后坐力', w.recoilname);
-  push('弓射击', w.bowname); push('射击1', w.bow1name); push('射击2', w.bow2name); push('射击3', w.bow3name); push('射击4', w.bow4name);
-  push('猎虫类型', w.kinname);
+  const params = weaponSpecificStats(w);
 
   view.innerHTML = `
     ${crumbs([['#/weapons', '武器'], ['#/weapons?type=' + w.Wpn_Type_ID, weaponTypeName(w.Wpn_Type_ID)], [null, w.name]])}
@@ -1125,7 +844,7 @@ async function weaponPage({ token }, id) {
         <h1>${esc(w.name)}</h1>
         <div class="tags">${rarity(w.Rare)} ${tag(weaponTypeName(w.Wpn_Type_ID))} ${w.Slot ? chip('孔位 ' + '◉'.repeat(w.Slot)) : ''}
           ${elementChip(w.el1name, w.SpAtk1_Pt)}${elementChip(w.el2name, w.SpAtk2_Pt)}
-          <a class="chip gold" href="#/weapons/tree?type=${w.Wpn_Type_ID}">查看派生树 ↗</a></div>
+          <a class="chip gold" href="${forgeHref({ type: w.Wpn_Type_ID, weapon: w.Wpn_ID })}">在派生图中定位 ↗</a></div>
         <div class="stat-grid">
           ${statBox('攻击力', num(w.Atk), 'gold')}
           ${statBox('会心率', (w.Affinity ? w.Affinity + '%' : '0%'))}

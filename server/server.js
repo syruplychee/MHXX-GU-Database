@@ -391,6 +391,7 @@ function listWeapons(req, res) {
   const q = (url.searchParams.get('q') || '').trim();
   const type = url.searchParams.get('type');
   const rarity = url.searchParams.get('rarity');
+  const recipe = url.searchParams.get('recipe');
   const sort = ['Wpn_ID', 'Rare', 'Atk', 'Affinity'].includes(url.searchParams.get('sort'))
     ? url.searchParams.get('sort')
     : 'Wpn_ID';
@@ -409,13 +410,15 @@ function listWeapons(req, res) {
     where.push('w.Rare = ?');
     params.push(int(rarity));
   }
+  if (recipe === 'production') where.push('w.ProPx > 0');
+  if (recipe === 'upgrade') where.push('w.LvUpPx > 0');
   const w = where.join(' AND ');
   paged(req, res, {
     countSql: `SELECT COUNT(*) n FROM DB_Wpn w JOIN ID_Wpn_Name n ON n.Wpn_ID = w.Wpn_ID WHERE ${w}`,
     countParams: params,
     listSql: `SELECT w.Wpn_ID id, n.${nc} name, w.Wpn_Type_ID type, w.Rare rare, w.Atk atk, w.Affinity aff,
                      w.Def def, w.Slot slot, w.SpAtk1_ID el1, w.SpAtk1_Pt el1pt, w.SpAtk2_ID el2, w.SpAtk2_Pt el2pt,
-                     w.ImgFile img, e.${L('Wpn_SpAtk', lang)} el1name
+                     w.ImgFile img, w.ProPx productionPrice, w.LvUpPx upgradePrice, e.${L('Wpn_SpAtk', lang)} el1name
               FROM DB_Wpn w
               JOIN ID_Wpn_Name n ON n.Wpn_ID = w.Wpn_ID
               LEFT JOIN ID_Wpn_SpAtk e ON e.Wpn_SpAtk_ID = w.SpAtk1_ID
