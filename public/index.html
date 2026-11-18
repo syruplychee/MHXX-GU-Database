@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>MHXX Dex · 怪物猎人 XX 资料库</title>
+<link rel="icon" href="/icons/Mon_S_001" />
+<link rel="stylesheet" href="/style.css" />
+</head>
+<body>
+<div class="app">
+  <aside class="sidebar" id="sidebar">
+    <a class="brand" href="#/">
+      <span class="brand-mark">MH</span>
+      <span class="brand-text"><strong>MHXX Dex</strong><small>Monster Hunter XX 资料库</small></span>
+    </a>
+
+    <nav class="nav" id="nav">
+      <div class="nav-group">
+        <div class="nav-title">图鉴</div>
+        <a href="#/" data-route="home"><span class="ni">◈</span>总览</a>
+        <a href="#/items" data-route="items"><span class="ni">❖</span>道具</a>
+        <a href="#/weapons" data-route="weapons"><span class="ni">⚔</span>武器</a>
+        <a href="#/weapons/tree" data-route="weapon-tree"><span class="ni">⑃</span>武器派生树</a>
+        <a href="#/armor" data-route="armor"><span class="ni">⛨</span>防具</a>
+        <a href="#/skills" data-route="skills"><span class="ni">✦</span>技能</a>
+        <a href="#/jewels" data-route="jewels"><span class="ni">◉</span>装饰品</a>
+        <a href="#/monsters" data-route="monsters"><span class="ni">☠</span>怪物</a>
+        <a href="#/quests" data-route="quests"><span class="ni">⚑</span>任务</a>
+      </div>
+      <div class="nav-group">
+        <div class="nav-title">数据</div>
+        <a href="#/combos" data-route="combos"><span class="ni">⇄</span>调和</a>
+        <a href="#/horns" data-route="horns"><span class="ni">♪</span>笛旋律</a>
+        <a href="#/kinsects" data-route="kinsects"><span class="ni">❧</span>猎虫</a>
+        <a href="#/locations" data-route="locations"><span class="ni">▦</span>地图采集</a>
+        <a href="#/awards" data-route="awards"><span class="ni">✪</span>勋章</a>
+        <a href="#/arena" data-route="arena"><span class="ni">⚖</span>斗技大会</a>
+      </div>
+      <div class="nav-group">
+        <div class="nav-title">随从</div>
+        <a href="#/palico/weapons" data-route="palico"><span class="ni">✧</span>随从武器</a>
+        <a href="#/palico/armor" data-route="palico"><span class="ni">✧</span>随从防具</a>
+        <a href="#/palico/team" data-route="palico"><span class="ni">✧</span>随从队伍</a>
+        <a href="#/hfh" data-route="hfh"><span class="ni">✧</span>猫猎人</a>
+      </div>
+      <div class="nav-group">
+        <div class="nav-title">工具</div>
+        <a href="#/set" data-route="set"><span class="ni">◈</span>配装器</a>
+      </div>
+    </nav>
+
+    <div class="sidebar-foot">
+      <div>数据来源：MHXX Dex v1.2 Build 5</div>
+      <div class="dim">反编译 + 数据库解密重建</div>
+    </div>
+  </aside>
+
+  <div class="main">
+    <header class="topbar">
+      <button class="icon-btn menu-btn" id="menuBtn" title="菜单">☰</button>
+      <div class="search-wrap">
+        <input id="search" type="search" placeholder="搜索道具 / 武器 / 防具 / 怪物 / 任务 / 技能…" autocomplete="off" />
+        <div class="search-panel" id="searchPanel" hidden></div>
+      </div>
+      <div class="topbar-right">
+        <label class="lang-pick">
+          <span>语言</span>
+          <select id="langSelect"></select>
+        </label>
+        <span class="counts" id="topCounts"></span>
+      </div>
+    </header>
+
+    <main id="view" class="view"></main>
+  </div>
+</div>
+
+<div id="modal" class="modal" hidden></div>
+
+<script src="/app.js"></script>
+</body>
+</html>
