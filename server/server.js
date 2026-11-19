@@ -309,14 +309,20 @@ function weaponTypeOf(id) {
   return WEAPON_TYPES.find((t) => t.id === id) || null;
 }
 
-function decodeSharpness(hex) {
-  if (!hex || typeof hex !== 'string' || hex.length < 14) return [];
+function decodeSharpness(raw, canExtend) {
   const colors = ['#d0021b', '#f07a1b', '#f5d327', '#63c132', '#2f7fe0', '#e8f4ff', '#a06bd6'];
-  const out = [];
-  for (let i = 0; i < 7; i++) {
-    out.push({ color: colors[i], value: Number.parseInt(hex.substr(i * 2, 2), 16) });
-  }
-  return out;
+  // The desktop app reads decimal pairs stored from purple to red at maximum extension.
+  const values = raw.match(/\d{2}/g).map(Number).reverse();
+  const trim = (remaining) => {
+    const segments = values.slice();
+    for (let i = segments.length - 1; i >= 0 && remaining > 0; i--) {
+      const removed = Math.min(segments[i], remaining);
+      segments[i] -= removed;
+      remaining -= removed;
+    }
+    return segments.map((value, i) => ({ color: colors[i], value }));
+  };
+  return canExtend ? [trim(10), trim(5), trim(0)] : [trim(0)];
 }
 
 // DB_Wpn has no parent column: `Child` is the number of child weapons and rows are
@@ -501,8 +507,9 @@ function weaponDetail(req, res, id) {
     )
     .all(base.Wpn_Type_ID, id - 12, id + 12, id);
 
+  const [sharpness = [], ...sharpnessExtensions] = base.Wpn_Type_ID <= 11 ? decodeSharpness(base.Sharp, base.SharpP1 === 1) : [];
   json(res, 200, {
-    data: { ...base, sharpness: decodeSharpness(base.Sharp), typeName: weaponTypeOf(base.Wpn_Type_ID) },
+    data: { ...base, sharpness, sharpnessExtensions, typeName: weaponTypeOf(base.Wpn_Type_ID) },
     materials,
     ammo,
     songs,

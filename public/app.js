@@ -755,12 +755,17 @@ function resGrid(data) {
   return `<div class="res-grid">${cells.map(([n, v]) => `<div class="res"><b class="${v > 0 ? 'pos' : v < 0 ? 'neg' : ''}">${v > 0 ? '+' : ''}${v ?? 0}</b><span>${n}</span></div>`).join('')}</div>`;
 }
 
-function sharpnessBar(sharp) {
-  if (!sharp || !sharp.length) return '<span class="dim">—</span>';
-  const total = sharp.reduce((s, x) => s + x.value, 0);
-  if (!total) return '<span class="dim">该武器没有锋利度数据</span>';
-  return `<div><div class="sharp">${sharp.map((s) => (s.value ? `<span class="seg" style="width:${(s.value / total) * 100}%;background:${s.color}"></span>` : '')).join('')}</div>
-    <div class="sharp-legend">${sharp.map((s, i) => `<span>${['红', '橙', '黄', '绿', '蓝', '白', '紫'][i]} ${s.value}</span>`).join('')}</div></div>`;
+function sharpnessBars(weapon) {
+  const names = ['红', '橙', '黄', '绿', '蓝', '白', '紫'];
+  const labels = ['基础', '锋利度等级 +1', '锋利度等级 +2'];
+  // The original gauge is 180 pixels wide and uses 2 pixels per stored unit.
+  const scale = 90;
+  return `<div class="sharp-gauges">${[weapon.sharpness, ...weapon.sharpnessExtensions].map((segments, level) => {
+    const description = segments.map((s, i) => s.value ? `${names[i]} ${s.value}` : '').filter(Boolean).join('、');
+    return `<div class="sharp-gauge"><span>${labels[level]}</span><div class="sharp" role="img" aria-label="${labels[level]}，各色长度（数据库单位）${description}" title="${description}（数据库单位）">
+      ${segments.map((s) => s.value ? `<span class="seg" style="width:${s.value / scale * 100}%;background:${s.color}"></span>` : '').join('')}
+    </div></div>`;
+  }).join('')}</div>`;
 }
 
 /* ============================================================ item detail */
@@ -856,7 +861,7 @@ async function weaponPage({ token }, id) {
       </div>
     </div>
 
-    ${section('锋利度', `<div class="panel pad">${sharpnessBar(w.sharpness)}</div>`)}
+    ${w.sharpness.length ? section('锋利度', `<div class="panel pad">${sharpnessBars(w)}</div>`) : ''}
 
     ${params.length ? section('武器参数', `<div class="panel pad"><div class="kv">${params.map(([k, v]) => `<div class="row"><span>${esc(k)}</span><b>${esc(v)}</b></div>`).join('')}</div></div>`) : ''}
 

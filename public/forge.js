@@ -369,7 +369,7 @@ function forgeStats(w) {
     ${row('防御加成', `${w.Def > 0 ? '+' : ''}${num(w.Def)}`)}
     ${row('属性', elements || '无')}
     ${row('孔位', `<span class="forge-slots" aria-label="${w.Slot || 0} 个孔位">${'●'.repeat(w.Slot || 0)}${'○'.repeat(3 - (w.Slot || 0))}</span>`)}
-    ${(w.Wpn_Type_ID <= 11) ? row('锋利度', sharpnessBar(w.sharpness), 'forge-sharpness') : ''}
+    ${w.sharpness.length ? row('锋利度', sharpnessBars(w), 'forge-sharpness') : ''}
     ${weaponSpecificStats(w).map(([name, value]) => row(name, esc(value))).join('')}
   </dl>`;
 }
