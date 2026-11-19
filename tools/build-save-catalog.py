@@ -88,11 +88,12 @@ def build():
         "fortes": names("palico_fortes"),
         "targets": names("palico_targets"),
         "levels": {int(row["level"]): numbers(row, "support_slots", "skill_slots") for row in rows(GU, "palico-levels")},
+        "native": json.loads((REFERENCES / "mhgu-xx-se/tools/reference/palico_native_rules.json").read_text(encoding="utf-8")),
     }
     for kind, table in [("moves", "palico_support_moves"), ("skills", "palico_skills")]:
         palico[kind] = {
             int(row["id"]): [row["name"], row["generation_group"], int(row["teachable"]),
-                             skill_cost.get(int(row["id"])) if kind == "skills" else None]
+                             skill_cost.get(int(row["id"])) if kind == "skills" else None, row["role"]]
             for row in rows(XX, table)
         }
 
@@ -102,6 +103,8 @@ def build():
         "gear": gear, "jewels": jewels, "skills": names("skills"), "thresholds": thresholds,
         "charmLimits": limits, "charmSlots": charm_slots,
         "palico": palico, "arts": {int(row["id"]): row["name"] for row in rows(GU, "hunter-arts")},
+        "eventNames": {int(row["quest_id"]): row["name"] for row in rows(GU, "quest-index")
+                       if row["category"] in ("Event Hub", "Event Arena")},
     }
 
 

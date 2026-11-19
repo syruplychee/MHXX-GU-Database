@@ -3,6 +3,7 @@
 // Browser code and Node tests share the same binary reader. Offsets below are
 // relative to the body or the selected character as indicated at each use.
 const SaveEditorCore = (() => {
+  const palicoRules = typeof module !== 'undefined' ? require('./save-palico-rules.js') : SavePalicoRules;
   const HEADER_SIZE = 0x24;
   const SYSTEM_KEYS = { system: 0x36B2EE74, system_backup: 0xD0819B92 };
   const GU_BASES = [0x18CC78, 0x2AC53C, 0x3CBE00];
@@ -116,23 +117,6 @@ const SaveEditorCore = (() => {
     const naturalSlots = first ? catalog.charmSlots[marker][Math.max(1, Math.min(20, Math.floor(fulfillment)))] : maxSlots;
     integer('当前护石组合的孔数', value.slots, 0, Math.min(maxSlots, naturalSlots));
     return marker + 256;
-  }
-
-  function palicoLearnedOptions(palico, kind, index, catalog) {
-    const moves = kind === 'moves';
-    const fixed = moves ? (palico.forte === 0 ? 3 : 4) : 2;
-    const taught = moves && palico.forte === 0 ? 3 : 2;
-    const list = moves ? palico.learnedMoves : palico.learnedSkills;
-    if (index < fixed || index >= list.length || palico.forte > 7) return [];
-    const available = catalog.palico[kind];
-    const group = available[list[index]]?.[1];
-    const isTaught = index >= list.length - taught;
-    const ids = Object.keys(available).map(Number).filter(id => {
-      if (!id || (moves ? id >= 57 : id >= 96) || list.some((other, i) => i !== index && other === id)) return false;
-      const entry = available[id];
-      return isTaught ? entry[2] === 1 : !!group && entry[1] === group;
-    });
-    return isTaught ? [0, ...ids] : ids;
   }
 
   function checkHeader(data, layout) {
@@ -361,6 +345,10 @@ const SaveEditorCore = (() => {
       return {
         name: read(0, 32), greeting: read(0x60, 60), level: this.bytes[at + 0x24] + 1,
         exp: this.data.getUint32(at + 0x20, true), forte: this.bytes[at + 0x25], target: this.bytes[at + 0x27],
+        movePattern: this.bytes[at + 0x54], moveLength: this.bytes[at + 0x55],
+        skillPattern: this.bytes[at + 0x56], skillLength: this.bytes[at + 0x57],
+        rawMoves: take(0x38, 16), rawSkills: take(0x48, 12),
+        dlc: !!(this.data.getUint32(at + 0xE0, true) & 0x480),
         equippedMoves: take(0x28, 8).filter(Boolean), equippedSkills: take(0x30, 8).filter(Boolean),
         learnedMoves: take(0x38, Math.min(this.bytes[at + 0x55], 16)),
         learnedSkills: take(0x48, Math.min(this.bytes[at + 0x57], 12)),
@@ -369,6 +357,17 @@ const SaveEditorCore = (() => {
         colors: Object.fromEntries(Object.entries(colorFields).map(([key, offset]) =>
           [key, '#' + take(offset, 3).map(channel => channel.toString(16).padStart(2, '0')).join('')])),
       };
+    }
+
+    knownSpecialSkills(slot, catalog) {
+      const known = new Set();
+      for (let index = 0; index < CAT_COUNT; index++) {
+        const cat = this.palico(slot, index);
+        for (const id of cat?.learnedSkills ?? []) {
+          if (catalog.palico.skills[id]?.[4] === 'special') known.add(id);
+        }
+      }
+      return [...known];
     }
 
     setPalico(slot, index, patch, catalog) {
@@ -406,39 +405,52 @@ const SaveEditorCore = (() => {
         const offset = colorFields[key];
         for (let i = 0; i < 3; i++) next[offset + i] = parseInt(value.slice(1 + i * 2, 3 + i * 2), 16);
       }
+      const same = (a, b) => a.length === b.length && a.every((id, i) => id === b[i]);
+      const current = { ...cat };
       let learnedChanged = false;
-      for (const [kind, field, offset] of [['moves', 'learnedMoves', 0x38], ['skills', 'learnedSkills', 0x48]]) {
-        const edited = patch[field];
-        if (!edited || (edited.length === cat[field].length && edited.every((id, i) => id === cat[field][i]))) continue;
-        if (edited.length !== cat[field].length || edited.filter(Boolean).length !== new Set(edited.filter(Boolean)).size) {
-          throw new Error('已学列表出现重复条目或长度不符。');
+      for (const [kind, offset, patternOffset] of [['moves', 0x38, 0x54], ['skills', 0x48, 0x56]]) {
+        const fields = palicoRules.columns[kind];
+        const pattern = patch[fields.pattern] ?? cat[fields.pattern];
+        const edited = patch[fields.learned] ?? cat[fields.learned];
+        if (pattern === cat[fields.pattern] && same(edited, cat[fields.learned])) continue;
+        if (cat.dlc || palicoRules.audit(cat, catalog).length) throw new Error('配信猫或特殊组合的原始已学栏需保留。');
+        const profile = { ...cat, [fields.pattern]: pattern };
+        const rule = palicoRules.describe(profile, kind, catalog);
+        if (!rule.sequence || edited.length !== rule.expected ||
+            !same(edited.slice(0, rule.fixed), cat[fields.learned].slice(0, rule.fixed))) {
+          throw new Error(`${rule.prefix}组合长度或固有项与原生表不符。`);
         }
-        edited.forEach((id, i) => {
-          if (id !== cat[field][i] && !palicoLearnedOptions(cat, kind, i, catalog).includes(id)) {
-            throw new Error('已学条目要符合所在位置的原生类别。');
+        const taughtAt = edited.length - rule.transfer;
+        const taught = edited.slice(taughtAt).filter(Boolean);
+        if (kind === 'skills' && taught.some(id => catalog.palico.skills[id]?.[4] === 'special')) {
+          const known = this.knownSpecialSkills(slot, catalog);
+          if (taught.some(id => catalog.palico.skills[id]?.[4] === 'special' && !known.includes(id))) {
+            throw new Error('只能传授当前角色的艾露猫已会的配信技能。');
           }
-        });
-        const taught = kind === 'moves' && cat.forte === 0 ? 3 : 2;
-        const taughtAt = edited.length - taught;
-        const kept = edited.slice(taughtAt).filter(Boolean);
-        next.set([...edited.slice(0, taughtAt), ...kept, ...Array(taught - kept.length).fill(0)], offset);
+        }
+        const learned = [...edited.slice(0, taughtAt), ...taught, ...Array(rule.transfer - taught.length).fill(0)];
+        const physical = [...learned, ...Array(fields.physical - learned.length).fill(rule.sentinel)];
+        Object.assign(current, { [fields.learned]: learned, [fields.pattern]: pattern, [fields.length]: learned.length, [fields.raw]: physical });
+        next.set(physical, offset);
+        next.set([pattern, learned.length], patternOffset);
         learnedChanged = true;
+      }
+      if (learnedChanged) {
+        const issues = palicoRules.audit(current, catalog);
+        if (issues.length) throw new Error(issues.join(' '));
       }
       const moves = patch.equippedMoves ?? cat.equippedMoves;
       const skills = patch.equippedSkills ?? cat.equippedSkills;
-      const same = (a, b) => a.length === b.length && a.every((id, i) => id === b[i]);
       if (level < cat.level || learnedChanged || !same(moves, cat.equippedMoves) || !same(skills, cat.equippedSkills)) {
-        const lists = [patch.learnedMoves ?? cat.learnedMoves, patch.learnedSkills ?? cat.learnedSkills];
+        const lists = [current.learnedMoves, current.learnedSkills];
         [moves, skills].forEach((list, i) => {
           const sentinel = i ? 96 : 57;
           if (list.length > 8 || list.length !== new Set(list).size || list.some(id => !id || id >= sentinel || !lists[i].includes(id))) {
             throw new Error('只能装备有效且不重复的已学行动或技能。');
           }
         });
-        const [moveSlots, skillSlots] = catalog.palico.levels[level] ?? [0, 0];
-        const costs = skills.map(id => catalog.palico.skills[id]?.[3]);
-        if (moves.length > moveSlots + 2 + Number(skills.includes(21)) ||
-            costs.some(cost => !Number.isInteger(cost)) || costs.reduce((sum, cost) => sum + cost, 0) > skillSlots) {
+        const { limitMoves, totalSkills, usedSkills } = palicoRules.capacity(level, moves, skills, catalog);
+        if (moves.length > limitMoves || usedSkills === null || usedSkills > totalSkills) {
           throw new Error('装备的行动或技能超过此等级的槽位，或包含无法确认消耗的技能。');
         }
         next.fill(0, 0x28, 0x38);
@@ -606,7 +618,7 @@ const SaveEditorCore = (() => {
 
   return {
     formats, stats, itemCount, shoutoutCount, xxOnlyItems, boxes, typeNames, catCount: CAT_COUNT,
-    lookFields, unavailableInGu, palicoLearnedOptions,
+    lookFields, unavailableInGu, palicoRules,
     openSave: (bytes) => new SaveFile(bytes),
     convertSave,
   };

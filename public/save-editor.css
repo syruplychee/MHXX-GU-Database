@@ -153,11 +153,20 @@
 .save-checklist, .save-learned-list { display: grid; gap: 5px; }
 .save-checklist input { accent-color: var(--gold); }
 .save-learned-list .save-field { grid-template-columns: 18px minmax(0, 1fr); align-items: center; }
+.save-learned-list { margin-top: 8px; }
+.save-quest-page { display: grid; gap: 14px; }
+.save-quest-columns { display: grid; grid-template-columns: minmax(0, .95fr) minmax(0, 1.75fr); gap: 14px; align-items: start; }
+.save-quest-list { display: grid; gap: 6px; overflow: auto; max-height: 60vh; }
+.save-quest-list .save-slot { max-width: none; }
+#saveQuestEdit { min-width: 0; }
+#saveQuestRewards input { width: 68px; background: var(--bg-2); color: var(--text); border: 1px solid var(--line-2); border-radius: 5px; padding: 4px; }
 #saveGearFields { display: grid; gap: 10px; min-width: 0; }
 #saveGearOptions .save-fields { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 #saveGearBox { padding: 6px; color-scheme: dark; border: 1px solid var(--line-2); color: var(--text); background: var(--bg-2); border-radius: 7px; }
 @media (max-width: 760px) {
   .save-item-columns, .save-status-columns, .save-profile, .save-cat-columns { grid-template-columns: minmax(0, 1fr); }
+  .save-quest-columns { grid-template-columns: minmax(0, 1fr); }
+  .save-quest-list { max-height: 240px; }
   .save-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .save-cat-list { max-height: 220px; }
   .save-toolbar, .save-source { align-items: flex-start; }

@@ -4,7 +4,9 @@ const assert = require('node:assert/strict');
 const { readFileSync } = require('node:fs');
 const path = require('node:path');
 const test = require('node:test');
-const { openSave, convertSave } = require('../public/save-core.js');
+const { openSave, convertSave, palicoRules } = require('../public/save-core.js');
+const questStore = require('../public/save-quests-core.js');
+const { deflateSync } = require('node:zlib');
 const catalog = require('../public/save-catalog.json');
 
 const fixtures = {
@@ -282,5 +284,170 @@ test('可选公开模板实际读写验证', { skip: !process.env.MHXX_SAVE_FIXT
     const save = openSave(file);
     assert.equal(save.format, format);
     assert(Buffer.from(save.export()).equals(file));
+  }
+});
+
+test('艾露猫生成编号、固有项、传授来源、装备容量和原始字段一并校验', () => {
+  const file = fixture('switch-gu', [0], 0);
+  const base = fixtures['switch-gu'].header + fixtures['switch-gu'].bases[0];
+  const at = base + 0x23BB6;
+  file.write('测试猫', at);
+  file[at + 0x25] = 5;
+  file.fill(57, at + 0x38, at + 0x48);
+  file.fill(96, at + 0x48, at + 0x54);
+  file.set([12, 6, 9, 1, 4, 11, 15, 16, 0, 0], at + 0x38);
+  file.set([24, 11, 2, 4, 6, 9, 0, 0], at + 0x48);
+  file.set([3, 10, 3, 8], at + 0x54);
+  const save = openSave(file);
+  const original = save.palico(0, 0);
+  assert.deepEqual(palicoRules.audit(original, catalog), []);
+  const wrong = [...original.learnedMoves];
+  wrong[4] = 2; // A cannot be written into a B slot.
+  assert.throws(() => save.setPalico(0, 0, { learnedMoves: wrong }, catalog), /B 组/);
+  wrong[4] = 11;
+  assert.throws(() => save.setPalico(0, 0, { learnedMoves: wrong }, catalog), /重复/);
+  const newSpecial = [...original.learnedSkills];
+  newSpecial[6] = 62;
+  assert.throws(() => save.setPalico(0, 0, { learnedSkills: newSpecial }, catalog), /配信技能/);
+  assert.throws(() => save.setPalico(0, 0, { equippedMoves: [12, 6, 9, 1] }, catalog), /超过/);
+  assert.throws(() => save.setPalico(0, 0, { equippedSkills: [2, 4] }, catalog), /超过/);
+  assert(Buffer.from(save.export()).equals(file));
+  const changed = palicoRules.changePattern(original, 'moves', 0, catalog);
+  assert(save.setPalico(0, 0, changed, catalog));
+  const cat = save.palico(0, 0);
+  assert.equal(cat.movePattern, 0);
+  assert.equal(cat.moveLength, 14);
+  assert.deepEqual(cat.rawMoves.slice(14), [57, 57]);
+  assert.deepEqual(cat.learnedMoves.slice(0, 4), original.learnedMoves.slice(0, 4));
+  assert.deepEqual(palicoRules.audit(cat, catalog), []);
+  const legacy = Buffer.from(save.export());
+  legacy[at + 0x54] = 99;
+  const special = openSave(legacy);
+  assert(special.setPalico(0, 0, { greeting: '保留未知类型' }, catalog));
+  assert.equal(special.palico(0, 0).movePattern, 99);
+  assert.throws(() => special.setPalico(0, 0, { movePattern: 0 }, catalog), /原始已学栏/);
+});
+
+function questArc(id, gu) {
+  const primary = Buffer.alloc(gu ? 0x171 : 0xF9);
+  primary.writeUInt32LE(0x434B0000);
+  primary.writeUInt32LE(1, 4);
+  primary.writeUInt32LE(id, 12);
+  primary[0x16] = 50;
+  primary[0x17] = 3;
+  const strings = Buffer.from('原任务\0委托人\0文本\0\0\0\0\0');
+  const gmd = Buffer.alloc(40 + strings.length);
+  gmd.writeUInt32LE(0x00444D47);
+  gmd.writeUInt32LE(7, 0x18);
+  gmd.writeUInt32LE(strings.length, 0x20);
+  gmd.set(strings, 40);
+  const rewards = Buffer.alloc(184);
+  rewards.writeUInt32LE(0x3F800000);
+  rewards.writeUInt32LE(1, 4);
+  rewards.set([9, 0, 1, 100, 0, 0, 0, 255], 24);
+  const entries = [
+    [`quest\\questData\\questData_${id}`, 0x1BBFD18E, primary],
+    [`quest\\questData\\questData_${id}_jpn`, 0x242BB29A, gmd],
+    ['quest\\rem\\rem_123456', 0x5B3C302D, rewards],
+  ].map(([name, type, data]) => ({ name, type, data, packed: deflateSync(data) }));
+  const head = 12 + entries.length * 80;
+  const out = Buffer.alloc(head + entries.reduce((sum, entry) => sum + entry.packed.length, 0));
+  out.writeUInt32LE(0x00435241);
+  out.writeUInt16LE(17, 4);
+  out.writeUInt16LE(entries.length, 6);
+  let cursor = head;
+  entries.forEach((entry, index) => {
+    const at = 12 + 80 * index;
+    out.write(entry.name, at);
+    out.writeUInt32LE(entry.type, at + 64);
+    out.writeUInt32LE(entry.packed.length, at + 68);
+    out.writeUInt32LE(0x40000000 | entry.data.length, at + 72);
+    out.writeUInt32LE(cursor, at + 76);
+    out.set(entry.packed, cursor);
+    cursor += entry.packed.length;
+  });
+  return out;
+}
+
+function questFixture(format, id = 1010005) {
+  const file = fixture(format, [0], 0);
+  const { header } = fixtures[format];
+  const gu = format === 'switch-gu';
+  const at = header + (gu ? 0xF875 : 0xF874);
+  const stride = gu ? 0x1C00 : 0x1400;
+  const arc = questArc(id, gu);
+  file[header + (gu ? 0xB2D5 : 0xB2D4)] = 1;
+  file.writeUInt32LE(id, at);
+  file.writeUInt32LE(arc.length, at + 4);
+  file.set(arc, at + 8);
+  file.fill(0xAE, at + 8 + arc.length, at + 8 + arc.length + 256);
+  file.fill(0xAE, at + stride - 256, at + stride);
+  return file;
+}
+
+test('XX 配信任务包跨 NS / 3DS 导入，目标角色和存档封装保持原样', () => {
+  const source = openSave(questFixture('3ds-xx'));
+  const targetBytes = fixture('switch-xx', [1], 0x34);
+  const target = openSave(targetBytes);
+  const pack = questStore.exportPack(source);
+  assert.equal(questStore.importPack(target, pack), 1);
+  assert.deepEqual(questStore.exportPack(target), pack);
+  assert.equal(questStore.list(target)[0].id, 1010005);
+  const output = Buffer.from(target.export());
+  const base = fixtures['switch-xx'].header + fixtures['switch-xx'].bases[0];
+  assert(output.subarray(base).equals(targetBytes.subarray(base)));
+  assert(output.subarray(0, 36).equals(targetBytes.subarray(0, 36)));
+  assert.throws(() => questStore.importPack(openSave(questFixture('switch-gu')), pack), /不通用/);
+  const invalid = pack.slice();
+  invalid[20] = 0;
+  assert.throws(() => questStore.importPack(target, invalid), /位图/);
+  assert(Buffer.from(target.export()).equals(output));
+});
+
+test('GU 配信包省略账号字段并保留目标值，任务可改文本、参数及道具报酬', async () => {
+  const original = questFixture('switch-gu');
+  const account = 0x12C2D6;
+  original.fill(0x32, account, account + 8);
+  const source = openSave(original);
+  const pack = questStore.exportPack(source);
+  const recipient = questFixture('switch-gu');
+  recipient.fill(0x56, account, account + 8);
+  const save = openSave(recipient);
+  questStore.importPack(save, pack);
+  assert.deepEqual([...save.export().slice(account, account + 8)], Array(8).fill(0x56));
+  const before = questStore.list(save)[0];
+  const model = await questStore.inspectQuest(before.arc);
+  assert.deepEqual(await questStore.editQuest(model, {}), before.arc.slice());
+  const messages = [...model.texts[0].strings];
+  messages[0] = '我的新任务';
+  const edited = await questStore.editQuest(model, {
+    args: { time: 20, reward: 888 }, texts: { 0: messages },
+    rewards: { 0: [{ id: 10, count: 2, weight: 100 }, { id: 11, count: 1, weight: 1 }] },
+  });
+  assert(await questStore.replaceQuest(save, before.id, edited));
+  const next = await questStore.inspectQuest(questStore.list(save)[0].arc);
+  assert.equal(next.args.time, 20);
+  assert.equal(next.args.reward, 888);
+  assert.equal(next.texts[0].strings[0], '我的新任务');
+  assert.deepEqual(next.rewardTables[0].rows.map(row => row.id), [10, 11]);
+  const out = Buffer.from(save.export());
+  const start = 0xF899;
+  assert(out.subarray(0, start).equals(recipient.subarray(0, start)));
+  assert(out.subarray(start + 0x1C00).equals(recipient.subarray(start + 0x1C00)));
+  assert(out.subarray(start + 0x1B00, start + 0x1C00).equals(recipient.subarray(start + 0x1B00, start + 0x1C00)));
+  await assert.rejects(questStore.replaceQuest(save, before.id, questArc(before.id + 1, true)), /编号/);
+  assert(Buffer.from(save.export()).equals(out));
+});
+
+test('可选三版有配信任务存档逐条解包及整包往返', { skip: !process.env.MHXX_DLC_FIXTURES }, async () => {
+  const root = process.env.MHXX_DLC_FIXTURES;
+  for (const [folder, count] of [['MH Gen U Switch Savedata', 165], ['MH XX Switch Savedata', 180], ['MH XX 3DS Savedata', 180]]) {
+    const bytes = readFileSync(path.join(root, folder, 'system'));
+    const save = openSave(bytes);
+    const records = questStore.list(save);
+    assert.equal(records.length, count);
+    for (const record of records) assert.equal((await questStore.inspectQuest(record.arc)).arc.id, record.id);
+    assert.equal(questStore.importPack(save, questStore.exportPack(save)), count);
+    assert(Buffer.from(save.export()).equals(bytes));
   }
 });

@@ -294,6 +294,11 @@ function renderSavePalico(host, state, changed, catalog) {
   }
   state.catIndex = selected;
   const cat = cats[selected];
+  const legality = SaveEditorCore.palicoRules;
+  let draft = { ...cat };
+  const originalIssues = legality.audit(cat, catalog);
+  const fixedProfile = cat.dlc || originalIssues.length > 0;
+  const knownSpecial = source.knownSpecialSkills(slot, catalog);
   const names = kind => id => palico[kind][id]?.[0] ?? `#${id}`;
   host.innerHTML = `<div class="save-cat-columns">
     <section class="save-panel save-section"><div class="save-section-head"><h2>已雇用艾露猫</h2><span class="dim">${cats.filter(Boolean).length} 只</span></div>
@@ -315,26 +320,44 @@ function renderSavePalico(host, state, changed, catalog) {
         ${Object.entries(cat.colors).map(([key, color]) => `<label class="save-field"><span>${saveColorLabels[key]}</span>
           <input type="color" name="color-${key}" value="${color}"></label>`).join('')}
       </div></details>
-      <details open><summary>装备行动与技能</summary><div class="save-cat-abilities" id="saveCatEquipped"></div></details>
+      <details open><summary>装备行动与技能</summary><p class="save-help" id="saveCatCapacity"></p><div class="save-cat-abilities" id="saveCatEquipped"></div></details>
       <details><summary>已学行动与技能</summary>
-        <p class="save-help">固有能力保持原样。其他栏按生成类别或传授规则提供可选项。</p>
-        <div class="save-cat-abilities">${['moves', 'skills'].map((kind, group) => {
-    const list = group ? cat.learnedSkills : cat.learnedMoves;
-    return `<section><h3>${group ? '已学技能' : '已学行动'}</h3><div class="save-learned-list">${list.map((id, index) => {
-      const choices = SaveEditorCore.palicoLearnedOptions(cat, kind, index, catalog);
-      return `<label class="save-field"><span>${index + 1}</span><select data-cat-learned="${kind}" ${choices.length ? '' : 'disabled'}>
-        ${saveOptions((choices.length ? choices : [id]).map(value => [value, names(kind)(value)]), id)}</select></label>`;
-    }).join('')}</div></section>`;
-  }).join('')}</div></details>
+        <p class="save-help">${fixedProfile ? '本猫使用配信或特殊组合，已学栏保留原始数据。' : '生成栏按原生 A/B/C 组合筛选，传授栏单独填写。'}</p>
+        ${originalIssues.length ? `<p class="save-help">${esc(originalIssues[0])}</p>` : ''}
+        <div class="save-cat-abilities" id="saveCatLearned"></div></details>
       <div class="save-actions"><button class="btn primary" type="submit">应用艾露猫修改</button><span class="save-form-note" role="status"></span></div>
     </form>
   </div>`;
   const form = $('#savePalicoForm', host);
   const note = $('.save-form-note', form);
   const equipped = $('#saveCatEquipped', form);
+  const learnedBox = $('#saveCatLearned', form);
+  const kinds = ['moves', 'skills'];
   let abilitiesEdited = false;
   const getLearned = kind => $$('[data-cat-learned="' + kind + '"]', form).map(select => Number(select.value));
   const getEquipped = kind => $$('input[name="' + kind + '"]:checked', equipped).map(input => Number(input.value));
+  function showCapacity() {
+    const result = legality.capacity(form.elements.catLevel.valueAsNumber, getEquipped('moves'), getEquipped('skills'), catalog);
+    const label = $('#saveCatCapacity', form);
+    label.textContent = `行动 ${result.usedMoves} / ${result.limitMoves} · 技能 ${result.usedSkills ?? '未知'} / ${result.totalSkills} 槽`;
+    label.dataset.tone = result.usedMoves > result.limitMoves || result.usedSkills === null || result.usedSkills > result.totalSkills ? 'error' : '';
+  }
+  function drawLearned() {
+    learnedBox.innerHTML = kinds.map(kind => {
+      const rule = legality.describe(draft, kind, catalog);
+      const list = draft[rule.fields.learned];
+      const choices = rule.patterns.map(([id, , sequence]) => [id, sequence]);
+      return `<section><h3>已学${rule.prefix}</h3>
+        <label class="save-field"><span>生成类型</span><select data-cat-pattern="${kind}" ${fixedProfile ? 'disabled' : ''}>
+        ${saveOptions(choices, draft[rule.fields.pattern])}</select></label>
+        <div class="save-learned-list">${list.map((id, index) => {
+    const options = fixedProfile ? [] : legality.options(draft, kind, index, catalog, knownSpecial);
+    const label = index < rule.fixed ? '固有' : rule.sequence[index - rule.fixed] || '传授';
+    return `<label class="save-field"><span>${label}</span><select data-cat-learned="${kind}" ${options.length ? '' : 'disabled'}>
+      ${saveOptions((options.length ? options : [id]).map(value => [value, value === 0 ? '空' : names(kind)(value)]), id)}</select></label>`;
+  }).join('')}</div></section>`;
+    }).join('');
+  }
   function drawAbilities(moves, skills) {
     equipped.innerHTML = ['moves', 'skills'].map((kind, group) => {
       const current = group ? skills : moves;
@@ -344,13 +367,43 @@ function renderSavePalico(host, state, changed, catalog) {
         `<label><input type="checkbox" name="${kind}" value="${id}" ${current.includes(id) ? 'checked' : ''}>
           <span>${esc(names(kind)(id))}${group && palico.skills[id]?.[3] != null ? ` · ${palico.skills[id][3]} 槽` : ''}</span></label>`).join('') || '没有可装备的条目'}</div></section>`;
     }).join('');
+    showCapacity();
   }
+  drawLearned();
   drawAbilities(cat.equippedMoves, cat.equippedSkills);
   form.addEventListener('change', event => {
-    if (event.target.name === 'moves' || event.target.name === 'skills') abilitiesEdited = true;
-    if (!event.target.dataset.catLearned) return;
-    abilitiesEdited = true;
-    drawAbilities(...['moves', 'skills'].map(kind => getEquipped(kind).filter(id => getLearned(kind).includes(id))));
+    if (event.target.name === 'moves' || event.target.name === 'skills') {
+      abilitiesEdited = true;
+      showCapacity();
+    }
+    if (event.target.name === 'catLevel') showCapacity();
+    const type = event.target.dataset.catPattern;
+    if (type) {
+      try {
+        Object.assign(draft, legality.changePattern(draft, type, Number(event.target.value), catalog));
+      } catch (error) {
+        note.textContent = error.message;
+        note.dataset.tone = 'error';
+        drawLearned();
+        return;
+      }
+      drawLearned();
+    }
+    const learned = event.target.dataset.catLearned;
+    if (learned) {
+      const fields = legality.columns[learned];
+      const rule = legality.describe(draft, learned, catalog);
+      const entries = getLearned(learned);
+      const taught = entries.slice(-rule.transfer).filter(Boolean);
+      const packed = [...entries.slice(0, -rule.transfer), ...taught, ...Array(rule.transfer - taught.length).fill(0)];
+      draft[fields.learned] = packed;
+      draft[fields.raw] = [...packed, ...draft[fields.raw].slice(draft[fields.length])];
+      drawLearned();
+    }
+    if (type || learned) {
+      abilitiesEdited = true;
+      drawAbilities(...kinds.map(kind => getEquipped(kind).filter(id => getLearned(kind).includes(id))));
+    }
   });
   $('.save-cat-list', host).addEventListener('click', event => {
     const button = event.target.closest('[data-save-cat]');
@@ -366,7 +419,8 @@ function renderSavePalico(host, state, changed, catalog) {
         level: form.elements.catLevel.valueAsNumber, exp: form.elements.catExp.valueAsNumber, target: Number(form.elements.catTarget.value),
         looks: Object.fromEntries(Object.keys(cat.looks).map(key => [key, Number(form.elements[key].value)])),
         colors: Object.fromEntries(Object.keys(cat.colors).map(key => [key, form.elements['color-' + key].value])),
-        ...(abilitiesEdited && { learnedMoves: getLearned('moves'), learnedSkills: getLearned('skills'),
+        ...(abilitiesEdited && { movePattern: draft.movePattern, skillPattern: draft.skillPattern,
+          learnedMoves: getLearned('moves'), learnedSkills: getLearned('skills'),
           equippedMoves: getEquipped('moves'), equippedSkills: getEquipped('skills') }),
       }, catalog);
       if (updated) {

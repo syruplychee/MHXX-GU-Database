@@ -10,7 +10,7 @@ let saveCatalogRequest;
 
 function loadSaveCatalog() {
   if (!saveCatalogRequest) {
-    saveCatalogRequest = fetch('/save-catalog.json?v=1').then(response => {
+    saveCatalogRequest = fetch('/save-catalog.json?v=2').then(response => {
       if (!response.ok) throw new Error(`存档资料加载失败（HTTP ${response.status}）。`);
       return response.json();
     }).catch(error => {
@@ -26,8 +26,8 @@ function saveFormatLabel(save) {
   return save.layout.name + suffix;
 }
 
-function downloadSaveFile(save, name) {
-  const url = URL.createObjectURL(new Blob([save.export(name)], { type: 'application/octet-stream' }));
+function downloadSaveBytes(bytes, name) {
+  const url = URL.createObjectURL(new Blob([bytes], { type: 'application/octet-stream' }));
   const link = document.createElement('a');
   link.href = url;
   link.download = name;
@@ -35,6 +35,10 @@ function downloadSaveFile(save, name) {
   link.click();
   link.remove();
   setTimeout(() => URL.revokeObjectURL(url), 15_000);
+}
+
+function downloadSaveFile(save, name) {
+  downloadSaveBytes(save.export(name), name);
 }
 
 function saveFileButtons(prefix) {
@@ -84,7 +88,7 @@ function saveEditorPage() {
     $('#saveSourceInfo', root).textContent = `${saveFormatLabel(source)} · ${num(source.layout.size)} 字节`;
     const slots = source.slots();
     const tabs = [['status', '人物状态'], ['character', '角色编辑'], ['items', '道具箱'], ['gear', '装备箱'],
-      ['charms', '护石'], ['palico', '艾露猫'], ['shoutouts', '快捷喊话'], ['convert', '跨版本转换']];
+      ['charms', '护石'], ['palico', '艾露猫'], ['shoutouts', '快捷喊话'], ['quests', '配信任务'], ['convert', '跨版本转换']];
     area.innerHTML = `<section class="save-panel save-toolbar">
       <div class="save-slots" aria-label="角色槽">${slots.map((slot, i) => `<button type="button" class="save-slot" data-save-slot="${i}"
         aria-pressed="${state.slot === i && !!slot}" ${slot ? '' : 'disabled'}><span>槽 ${i + 1}</span><b>${slot ? esc(slot.name || '未命名角色') : '空槽'}</b></button>`).join('')}</div>
@@ -95,6 +99,8 @@ function saveEditorPage() {
     const content = $('#saveTabContent', root);
     if (state.tab === 'convert') {
       renderSaveConversion(content, state);
+    } else if (state.tab === 'quests') {
+      renderSaveCatalogPage(content, state, changed, renderSaveQuests);
     } else if (!slots[state.slot]) {
       content.innerHTML = '<p class="save-panel">这份存档没有已创建的角色。</p>';
     } else if (state.tab === 'items') {
