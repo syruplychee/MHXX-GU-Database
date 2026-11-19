@@ -154,7 +154,7 @@ async function route() {
       case 'armor': return parts[1] ? go((c) => armorDetailPage(c, +parts[1])) : go(armorListPage);
       case 'skills': return parts[1] ? go((c) => skillPage(c, +parts[1])) : go(skillsPage);
       case 'jewels': return parts[1] ? go((c) => jewelPage(c, +parts[1])) : go(jewelsPage);
-      case 'quests': return parts[1] ? go((c) => questPage(c, +parts[1])) : go(questsPage);
+      case 'quests': return go(questBrowserPage);
       case 'monsters': return parts[1] ? go((c) => monsterPage(c, +parts[1])) : go(monstersPage);
       case 'combos': return go(combosPage);
       case 'horns': return go(hornsPage);
@@ -561,26 +561,6 @@ function jewelsPage({ params, token }) {
   });
 }
 
-function questsPage({ params, token }) {
-  const levels = (S.meta.questLevelsByLang?.[S.lang] || []).map((l) => [l.id, l.name]);
-  const types = (S.meta.questTypesByLang?.[S.lang] || []).map((t) => [t.id, t.name]);
-  return listPage({
-    params, token, eyebrow: 'Quests', title: '任务', sub: '村 / 集会所 / DLC · 目标、报酬与怪物',
-    filters: [filterSearch(params), filterSelect('lv', '等级', levels, params), filterSelect('type', '类型', types, params)],
-    fetch: (p) => api('/quests', { q: p.q, lv: p.lv, type: p.type, page: p.page }),
-    href: (r) => `#/quests/${r.id}`,
-    columns: [
-      { label: '任务', render: (r) => `<div class="cell-name">${iconForQuest(r.icon)}<span><span class="nm">${esc(r.name)}</span><span class="sub">${esc(r.lv || '')}</span></span></div>` },
-      { label: '类型', render: (r) => tag(r.type || '—') },
-      { label: '关键', render: (r) => (r.key ? chip(r.key, 'gold') : '<span class="dim">—</span>') },
-      { label: '地点', render: (r) => esc(r.loc || '—') },
-      { label: '报酬', cls: 'num', render: (r) => num(r.reward) },
-      { label: 'HRP', cls: 'num', render: (r) => num(r.hrp) },
-      { label: '费用', cls: 'num', render: (r) => num(r.fee) },
-    ],
-  });
-}
-
 function monstersPage({ params, token }) {
   return listPage({
     params, token, eyebrow: 'Monsters', title: '怪物', sub: '弱点、状态耐性、陷阱与素材掉率',
@@ -970,46 +950,6 @@ async function jewelPage({ token }, id) {
     </div>
     ${d.materials.length ? section('生产素材', simpleTable(['素材', '数量'], d.materials.map((m) => `<tr class="clickable" data-href="#/items/${m.id}">
       <td><div class="cell-name">${itemIcon(m.id)}<span class="nm">${esc(m.name)}</span></div></td><td class="num">${num(m.qty)}</td></tr>`)), d.materials.length) : ''}
-  `;
-}
-
-/* ============================================================ quest detail */
-
-async function questPage({ token }, id) {
-  view.innerHTML = `<div class="loading">加载中…</div>`;
-  const d = await api(`/quests/${id}`);
-  if (token !== routeToken) return;
-  const q = d.data;
-  const lines = ['A', 'B', 'C', 'D'];
-  view.innerHTML = `
-    ${crumbs([['#/quests', '任务'], [null, q.name]])}
-    <div class="detail-hero">
-      <div class="detail-art"><div class="art-box noart">${iconForQuest(q.QstIcon)}</div></div>
-      <div class="detail-info">
-        <div class="eyebrow">Quest #${q.Qst_ID} · ${esc(q.lv || '')}</div>
-        <h1>${esc(q.name)}</h1>
-        <div class="tags">${tag(q.type || '—')} ${q.key ? chip(q.key, 'gold') : ''} ${tag(q.loc || '—')}</div>
-        <div class="stat-grid">
-          ${statBox('基本报酬', num(q.Reward) + 'z', 'gold')}${statBox('HRP', num(q.HRP))}${statBox('参加费', num(q.Fee) + 'z')}${statBox('时间', (q.Time || 0) + ' 分')}
-        </div>
-      </div>
-    </div>
-
-    ${section('目标', `<div class="panel pad"><div class="kv">
-      <div class="row"><span>主要目标</span><b>${esc(q.goal1 || '—')}</b></div>
-      <div class="row"><span>副目标</span><b>${esc(q.goal2 || '—')}</b></div>
-      ${q.Reward2 ? `<div class="row"><span>副目标报酬</span><b>${num(q.Reward2)}z / HRP ${num(q.HRP2)}</b></div>` : ''}
-    </div></div>`)}
-
-    ${d.monsters.length ? section('出现怪物', `<div class="monster-grid">${d.monsters.map((m) => `<a class="monster-card" href="#/monsters/${m.id}">${monIcon(m.id)}<span>${esc(m.name)}</span></a>`).join('')}</div>`) : ''}
-
-    ${lines.map((line) => {
-      const rows = d.rewards.filter((r) => r.line === line);
-      if (!rows.length) return '';
-      return section(`报酬 ${line}`, simpleTable(['道具', '数量', '概率'], rows.map((r) => `<tr class="clickable" data-href="#/items/${r.id}">
-        <td><div class="cell-name">${itemIcon(r.id)}<span class="nm">${esc(r.name)}</span></div></td>
-        <td class="num">${num(r.qty)}</td><td class="num">${pct(r.pct)}</td></tr>`)), rows.length);
-    }).join('')}
   `;
 }
 

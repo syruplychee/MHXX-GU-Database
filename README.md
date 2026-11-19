@@ -31,7 +31,7 @@ node server/server.js        # 或双击 start.cmd
 | 技能 | 205 个技能树；等级阈值、说明；提供该技能的防具与装饰品 |
 | 装饰品 | 275 种珠子；孔位、价格、技能、素材 |
 | 怪物 | 130 只；肉质弱点（切断/打击/射击/五属性/眩晕）、状态耐性、陷阱效果、分等级素材掉率、相关任务 |
-| 任务 | 1,307 个；等级/类型/关键任务筛选；目标、报酬 A–D、出现怪物 |
+| 任务 | 1,307 个；左侧搜索和组合筛选，右侧查看目标、报酬、怪物、前置、受注和解锁资料 |
 | 调和 / 笛旋律 / 猎虫 / 地图采集 / 勋章 / 斗技大会 / 猫猎人 | 原始数据表重建 |
 | 随从 | 随从武器、随从防具、随从队伍 |
 | 配装器 | 5 部位 + 护石 + 装饰品；实时计算防御、最大防御、五属性耐性、孔位占用与技能等级 |
@@ -93,7 +93,7 @@ webapp/
 | GET | `/api/armor/:id` | 防具详情 + 技能 + 素材 + 同系列 |
 | GET | `/api/skills?q&page`、`/api/skills/:id` | 技能树与等级 |
 | GET | `/api/jewels?q&slot&page`、`/api/jewels/:id` | 装饰品 |
-| GET | `/api/quests?q&lv&type&page`、`/api/quests/:id` | 任务与报酬 |
+| GET | `/api/quests?q&group&lv&type&key&supplement&page`、`/api/quests/:id` | 任务、报酬和解锁资料 |
 | GET | `/api/monsters?q&page`、`/api/monsters/:id` | 怪物弱点/耐性/陷阱/掉率 |
 | GET | `/api/combos`、`/api/horns`、`/api/kinsects`、`/api/palico/*`、`/api/arena`、`/api/locations`、`/api/awards`、`/api/hfh` | 其余数据表 |
 | GET | `/api/search?q` | 六类聚合搜索 |
@@ -101,6 +101,12 @@ webapp/
 | POST | `/api/set/compute` | 配装计算（部位 + 装饰品 + 护石 → 总防御/耐性/技能） |
 
 ---
+
+## 任务资料来源
+
+任务名称、星级、目标和结算报酬来自原版 MHXX Dex。前置、受注、狩技、食材及其他解锁信息取自 [jestar719/mhgu 随附的 MHXX 网页资料](https://github.com/jestar719/mhgu/tree/fb8878ea2e0ff4c2848d7d9599ceb2f1279700ff/app/src/main/assets/mhxx)，按星级、译名、任务目标和报酬等信息匹配。任务详情链接到对应的来源页面。没有把握的任务不会附上补充资料，只有解锁类别的条目会注明来源未列具体项目。
+
+`data/quest-reference.json` 随网页分发，本地使用无需联网。更新时运行 `uv run --script tools/import-quest-reference.py <mhgu 仓库目录>`。
 
 ## 配装器算法
 

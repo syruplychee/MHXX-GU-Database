@@ -9,6 +9,27 @@ const ROOT = path.join(__dirname, '..');
 const DB_PATH = process.env.MHXX_DB || path.join(ROOT, 'data', 'mhxx_dex.sqlite');
 const PUBLIC_DIR = path.join(ROOT, 'public');
 const PORT = Number(process.env.PORT || 8787);
+const questReference = require('../data/quest-reference.json');
+const questSource = `https://github.com/jestar719/mhgu/blob/${questReference.commit}/app/src/main/assets/mhxx/`;
+const questSupplementGroups = {
+  conditions: (q) => q.request?.some((r) => r.title.includes('条件')) ||
+    q.conditions?.some((part) => typeof part !== 'string' || !['初始任务', 'MHXX的み', '\n'].includes(part)),
+  arts: (q) => q.arts || q.flags?.includes('arts'),
+  food: (q) => q.food || q.flags?.includes('food'),
+  other: (q) => q.extras || q.flags?.some((flag) => !['arts', 'food'].includes(flag)),
+};
+const questSupplementIds = Object.fromEntries(Object.entries(questSupplementGroups).map(([key, match]) => [
+  key, JSON.stringify(Object.keys(questReference.quests).filter((id) => match(questReference.quests[id])).map(Number)),
+]));
+const questDependents = new Map();
+for (const [id, note] of Object.entries(questReference.quests)) {
+  const refs = [...(note.conditions || []), ...(note.request || []).filter((r) => r.title.includes('条件')).flatMap((r) => r.parts)];
+  for (const prerequisite of new Set(refs.filter((r) => r.quest).map((r) => r.quest))) {
+    if (prerequisite === Number(id)) continue;
+    if (!questDependents.has(prerequisite)) questDependents.set(prerequisite, []);
+    questDependents.get(prerequisite).push(Number(id));
+  }
+}
 
 let db;
 try {
@@ -84,9 +105,9 @@ function json(res, code, body) {
   res.end(data);
 }
 
-function paged(req, res, { countSql, countParams, listSql, listParams, map }) {
+function paged(req, res, { countSql, countParams, listSql, listParams, map, focusPage }) {
   const url = new URL(req.url, 'http://x');
-  const page = Math.max(1, int(url.searchParams.get('page'), 1));
+  const page = Math.max(1, int(url.searchParams.get('page'), focusPage || 1));
   const size = Math.min(200, Math.max(1, int(url.searchParams.get('size'), 40)));
   const total = db.prepare(countSql).get(...countParams).n;
   const rows = db.prepare(listSql).all(...listParams, size, (page - 1) * size).map(map || ((r) => r));
@@ -734,6 +755,9 @@ function listQuests(req, res) {
   const q = (url.searchParams.get('q') || '').trim();
   const lv = url.searchParams.get('lv');
   const type = url.searchParams.get('type');
+  const group = url.searchParams.get('group');
+  const key = url.searchParams.get('key');
+  const supplement = url.searchParams.get('supplement');
   const nc = L('Qst_Name', lang);
   const where = ['1 = 1'];
   const params = [];
@@ -749,13 +773,37 @@ function listQuests(req, res) {
     where.push('q.Qst_Type_ID = ?');
     params.push(int(type));
   }
+  const groups = { village: [13, 22], hub: [23, 29], g: [30, 33], permit: [34, 34], dlc: [36, 45] };
+  if (Object.hasOwn(groups, group)) {
+    where.push('q.Qst_Lv_ID BETWEEN ? AND ?');
+    params.push(...groups[group]);
+  }
+  if (key === 'progress') where.push('q.Qst_Key_ID IN (1, 2)');
+  if (key === '1' || key === '2') {
+    where.push('q.Qst_Key_ID = ?');
+    params.push(Number(key));
+  }
+  if (key === 'talk') where.push('q.QstTalk = 1');
+  if (Object.hasOwn(questSupplementIds, supplement)) {
+    where.push('q.Qst_ID IN (SELECT value FROM json_each(?))');
+    params.push(questSupplementIds[supplement]);
+  }
   const w = where.join(' AND ');
+  const selected = int(url.searchParams.get('selected'));
+  const size = Math.min(200, Math.max(1, int(url.searchParams.get('size'), 40)));
+  const scope = `FROM DB_Qst q JOIN ID_Qst_Name n ON n.Qst_ID = q.Qst_ID WHERE ${w}`;
+  let focusPage;
+  if (selected && !url.searchParams.has('page') && db.prepare(`SELECT 1 ${scope} AND q.Qst_ID = ?`).get(...params, selected)) {
+    const { n } = db.prepare(`SELECT COUNT(*) n ${scope} AND q.Qst_ID < ?`).get(...params, selected);
+    focusPage = Math.floor(n / size) + 1;
+  }
   paged(req, res, {
-    countSql: `SELECT COUNT(*) n FROM DB_Qst q JOIN ID_Qst_Name n ON n.Qst_ID = q.Qst_ID WHERE ${w}`,
+    focusPage,
+    countSql: `SELECT COUNT(*) n ${scope}`,
     countParams: params,
     listSql: `SELECT q.Qst_ID id, n.${nc} name, lv.${L('Qst_Lv', lang)} lv, ty.${L('Qst_Type', lang)} type,
                      k.${L('Qst_Key', lang)} key, l.${L('Loc_Name', lang)} loc, q.Reward reward, q.HRP hrp,
-                     q.Fee fee, q.Time time, q.QstIcon icon
+                     q.Fee fee, q.Time time, q.QstIcon icon, q.QstTalk talk
               FROM DB_Qst q
               JOIN ID_Qst_Name n ON n.Qst_ID = q.Qst_ID
               LEFT JOIN ID_Qst_Lv lv ON lv.Qst_Lv_ID = q.Qst_Lv_ID
@@ -764,6 +812,7 @@ function listQuests(req, res) {
               LEFT JOIN ID_Loc_Name l ON l.Loc_ID = q.Loc_ID
               WHERE ${w} ORDER BY q.Qst_ID LIMIT ? OFFSET ?`,
     listParams: params,
+    map: (row) => ({ ...row, flags: questReference.quests[row.id]?.flags || [] }),
   });
 }
 
@@ -802,7 +851,11 @@ function questDetail(req, res, id) {
       .get(mid);
     monsters.push(m || { id: mid, name: '' });
   }
-  json(res, 200, { data: base, rewards, monsters });
+  const note = questReference.quests[id];
+  const dependents = (questDependents.get(id) || []).map((quest) => db.prepare(
+    `SELECT Qst_ID id, ${L('Qst_Name', lang)} name FROM ID_Qst_Name WHERE Qst_ID = ?`
+  ).get(quest));
+  json(res, 200, { data: base, rewards, monsters, reference: note || null, questSource, dependents });
 }
 
 // ---------------------------------------------------------------- monsters
