@@ -1027,20 +1027,24 @@ async function renderSlots(token) {
   rows.push(`
     <div class="slot-row" data-slot="talisman">
       <div class="slot-label">护石</div>
-      <div style="display:grid;gap:6px">
+      <div class="loadout-form loadout-manual-charm">
         ${[0, 1, 2].map((i) => `
-          <div style="display:flex;gap:8px;align-items:center">
-            <select data-tal-skill="${i}" style="flex:1;padding:6px 8px;background:var(--panel-2);border:1px solid var(--line);border-radius:8px">
-              <option value="">（无）</option>
-              ${skills.map((s) => `<option value="${s.id}" ${tal[i] && Number(tal[i].treeId) === s.id ? 'selected' : ''}>${esc(s.name)}</option>`).join('')}
-            </select>
-            <input type="number" data-tal-pt="${i}" value="${tal[i] ? tal[i].pt : ''}" placeholder="点数" style="width:84px;padding:6px 8px;background:var(--panel-2);border:1px solid var(--line);border-radius:8px" />
+          <div class="loadout-charm-skill">
+            <div class="loadout-skill-fields" data-loadout-skill-search>
+              <input type="search" aria-label="搜索护石技能 ${i + 1}" placeholder="输入技能名搜索" autocomplete="off">
+              <select data-tal-skill="${i}" aria-label="选择护石技能 ${i + 1}">
+                <option value="">（无）</option>
+                ${loadoutOptions(skills, (s) => s.name, tal[i]?.treeId)}
+              </select>
+            </div>
+            <input type="number" data-tal-pt="${i}" value="${tal[i]?.pt ?? ''}" aria-label="护石技能 ${i + 1} 点数" placeholder="点数" />
           </div>`).join('')}
       </div>
       <div class="dim">最多 3 个技能</div>
     </div>`);
   if (token !== routeToken) return;
   host.innerHTML = rows.join('');
+  bindLoadoutSkillSearch(host, skills);
 
   host.onclick = async (e) => {
     const clear = e.target.closest('[data-clear]');
@@ -1065,15 +1069,15 @@ async function renderSlots(token) {
       return renderSlots(token).then(() => computeSet(token));
     }
   };
-  host.oninput = (e) => {
-    const pt = e.target.closest('[data-tal-pt]');
-    if (!pt) return;
-    const i = Number(pt.dataset.talPt);
-    const skillSel = host.querySelector(`[data-tal-skill="${i}"]`);
-    const treeId = Number(skillSel.value);
-    S.set.talisman.skills[i] = treeId ? { treeId, pt: Number(pt.value || 0) } : null;
-    S.set.talisman.skills = S.set.talisman.skills.filter(Boolean);
+  function saveManualCharm() {
+    S.set.talisman.skills = $$('[data-tal-skill]', host)
+      .filter((select) => select.value)
+      .map((select) => ({ treeId: Number(select.value), pt: Number($(`[data-tal-pt="${select.dataset.talSkill}"]`, host).value || 0) }));
     saveSet();
+  }
+  host.oninput = (e) => {
+    if (!e.target.matches('[data-tal-pt]')) return;
+    saveManualCharm();
     clearTimeout(host._t);
     host._t = setTimeout(() => computeSet(token), 350);
   };
@@ -1082,11 +1086,8 @@ async function renderSlots(token) {
     if (!sel) return;
     const i = Number(sel.dataset.talSkill);
     const ptInput = host.querySelector(`[data-tal-pt="${i}"]`);
-    const treeId = Number(sel.value);
-    if (!ptInput.value) ptInput.value = 3;
-    S.set.talisman.skills[i] = treeId ? { treeId, pt: Number(ptInput.value || 0) } : null;
-    S.set.talisman.skills = S.set.talisman.skills.filter(Boolean);
-    saveSet();
+    if (sel.value && !ptInput.value) ptInput.value = 3;
+    saveManualCharm();
     computeSet(token);
   };
 }

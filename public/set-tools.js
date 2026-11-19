@@ -21,6 +21,40 @@ function loadoutOptions(items, getLabel, selected) {
   return items.map((item) => `<option value="${esc(item.id)}" ${String(item.id) === String(selected) ? 'selected' : ''}>${esc(getLabel(item))}</option>`).join('');
 }
 
+function bindLoadoutSkillSearch(root, skills) {
+  const reset = $$('[data-loadout-skill-search]', root).map((picker) => {
+    const query = $('input[type="search"]', picker);
+    const choice = $('select', picker);
+    const empty = choice.options[0].outerHTML;
+    const match = () => {
+      const term = query.value.trim().toLowerCase();
+      return skills.filter((skill) => skill.name.toLowerCase().includes(term));
+    };
+    const update = () => {
+      const selected = choice.value;
+      const matches = match();
+      const current = skills.find((skill) => String(skill.id) === selected);
+      const choices = current && !matches.includes(current) ? [current, ...matches] : matches;
+      choice.innerHTML = empty + loadoutOptions(choices, (skill) => skill.name) +
+        (matches.length ? '' : '<option disabled>没有匹配的技能</option>');
+      choice.value = selected;
+    };
+    query.addEventListener('input', update);
+    query.addEventListener('keydown', (event) => {
+      if (event.key !== 'Enter' || event.isComposing) return;
+      event.preventDefault();
+      const matches = match();
+      if (matches.length === 1) {
+        choice.value = matches[0].id;
+        choice.dispatchEvent(new Event('change', { bubbles: true }));
+      }
+      choice.focus();
+    });
+    return () => { query.value = ''; update(); };
+  });
+  return () => reset.forEach((clear) => clear());
+}
+
 function loadoutSlots(selected) {
   return loadoutOptions([0, 1, 2, 3].map((id) => ({ id })), (item) => `${item.id} 孔`, selected);
 }
@@ -53,7 +87,11 @@ async function setWorkspacePage(ctx) {
 
 function loadoutCharmPage(host, charms, skills, treeNames) {
   let editing = null;
-  const row = (i) => `<div class="loadout-charm-skill"><label>技能 ${i}<select name="skill${i}"><option value="">无</option>${loadoutOptions(skills, (s) => s.name)}</select></label><label>点数<input name="points${i}" type="number" min="-99" max="99" step="1" value="0"></label></div>`;
+  const row = (i) => `<div class="loadout-charm-skill">
+    <div class="loadout-skill-fields" data-loadout-skill-search>
+      <label>技能 ${i}<input type="search" placeholder="输入技能名搜索" autocomplete="off"></label>
+      <select name="skill${i}" aria-label="选择技能 ${i}"><option value="">无</option>${loadoutOptions(skills, (s) => s.name)}</select>
+    </div><label>点数<input name="points${i}" type="number" min="-99" max="99" step="1" value="0"></label></div>`;
   host.innerHTML = `<div class="loadout-columns"><section class="loadout-panel loadout-config"><h2 id="loadoutCharmHeading">录入护石</h2>
     <form id="loadoutCharmForm" class="loadout-form">
     <label>护石孔位<select name="slots">${loadoutSlots(0)}</select></label>${row(1)}${row(2)}
@@ -63,6 +101,7 @@ function loadoutCharmPage(host, charms, skills, treeNames) {
   const rows = $('#loadoutCharmRows');
   const cancel = $('#loadoutCharmCancel');
   const note = $('#loadoutCharmMessage');
+  const resetSkillSearch = bindLoadoutSkillSearch(form, skills);
   function render() {
     $('#loadoutCharmCount').textContent = `${charms.length} 枚`;
     rows.innerHTML = charms.length ? charms.map((charm) => `<div class="loadout-charm-row"><div><b>${esc(loadoutCharmLabel(charm, (skill) => treeNames.get(skill.treeId)))}</b></div>
@@ -72,6 +111,7 @@ function loadoutCharmPage(host, charms, skills, treeNames) {
   function edit(charm) {
     editing = charm?.id || null;
     form.reset();
+    resetSkillSearch();
     $('#loadoutCharmHeading').textContent = editing ? '编辑护石' : '录入护石';
     cancel.hidden = !editing;
     note.textContent = '';
@@ -174,6 +214,10 @@ function loadoutSearchPage(host, levels, treeNames, charms, favorites, token) {
   if (!charms.some((charm) => charm.id === state.charmId) && state.charmId !== 'none') state.charmId = 'any';
   const available = levels.slice().sort((a, b) => a.name.localeCompare(b.name));
   const byId = new Map(levels.map((skill) => [skill.id, skill]));
+  const goalLabel = (skill) => {
+    const tree = treeNames.get(skill.treeId);
+    return tree ? `${skill.name}（${tree}）` : skill.name;
+  };
   host.innerHTML = `<div class="loadout-columns"><section class="loadout-panel loadout-config"><h2>配装条件</h2>
     <form id="autoLoadoutForm" class="loadout-form">
       <div class="loadout-form-pair"><label>职业<select name="borg"><option value="1">剑士</option><option value="2">枪手</option></select></label><label>性别<select name="morf"><option value="1">男性</option><option value="2">女性</option></select></label></div>
@@ -200,11 +244,14 @@ function loadoutSearchPage(host, levels, treeNames, charms, favorites, token) {
   function pickChoices() {
     const q = query.value.trim().toLowerCase();
     const options = available.filter((skill) => `${skill.name} ${treeNames.get(skill.treeId)}`.toLowerCase().includes(q));
-    choice.innerHTML = options.length ? loadoutOptions(options, (s) => `${s.name}（${s.pt} 点）`) : '<option value="">没有符合条件的技能</option>';
+    choice.innerHTML = options.length ? loadoutOptions(options, (s) => `${goalLabel(s)} · ${s.pt} 点`) : '<option value="">没有符合条件的技能</option>';
     $('#loadoutAddSkill').disabled = !options.length;
   }
   function renderTargets() {
-    selected.innerHTML = state.targets.length ? state.targets.map((id) => `<button type="button" class="loadout-target" data-remove-target="${id}" aria-label="移除${esc(byId.get(id).name)}">${esc(byId.get(id).name)} <span aria-hidden="true">×</span></button>`).join('')
+    selected.innerHTML = state.targets.length ? state.targets.map((id) => {
+      const label = esc(goalLabel(byId.get(id)));
+      return `<button type="button" class="loadout-target" data-remove-target="${id}" aria-label="移除${label}">${label} <span aria-hidden="true">×</span></button>`;
+    }).join('')
       : '<p class="loadout-note">至少添加一项想发动的技能。</p>';
   }
   function addTarget() {
