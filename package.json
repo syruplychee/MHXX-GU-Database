@@ -1,11 +1,13 @@
 {
   "name": "mhxx-library",
+  "productName": "MHXX资料库",
   "version": "1.0.0",
   "private": true,
   "description": "MHXX资料库",
   "main": "server/server.js",
   "scripts": {
     "start": "node server/server.js",
+    "build:windows": "powershell.exe -NoProfile -File desktop/build.ps1",
     "test": "node --test"
   },
   "engines": {

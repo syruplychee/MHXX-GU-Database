@@ -13,13 +13,6 @@ const PUBLIC_DIR = path.join(ROOT, 'public');
 const PORT = Number(process.env.PORT || 8787);
 
 let api;
-try {
-  api = openLibrary();
-} catch (err) {
-  console.error(`无法打开数据库：${DB_PATH}\n${err.message}`);
-  console.error('请确认 webapp/data/mhxx_dex.sqlite 存在（由 Decompiled/database/mhxx_dex_decrypted.sqlite 复制而来）。');
-  process.exit(1);
-}
 
 function openLibrary() {
   const db = new DatabaseSync(DB_PATH, { readOnly: true });
@@ -131,6 +124,24 @@ const server = http.createServer(async (req, res) => {
   }
 });
 
-server.listen(PORT, '127.0.0.1', () => {
-  console.log(`MHXX资料库 http://127.0.0.1:${PORT}`);
-});
+async function startServer(port = PORT) {
+  api = openLibrary();
+  return new Promise((resolve, reject) => {
+    server.once('error', reject);
+    server.listen(port, '127.0.0.1', () => {
+      server.off('error', reject);
+      resolve(server);
+    });
+  });
+}
+
+module.exports = { startServer };
+
+if (require.main === module) {
+  startServer().then((server) => {
+    console.log(`MHXX资料库 http://127.0.0.1:${server.address().port}`);
+  }).catch((error) => {
+    console.error(`无法启动 MHXX资料库：${error.message}`);
+    process.exitCode = 1;
+  });
+}

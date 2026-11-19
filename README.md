@@ -1,11 +1,21 @@
 # MHXX资料库
 
 《怪物猎人 XX》的网页资料库，提供装备、怪物和任务查询，以及配装和存档工具。
-**零运行时依赖**：只用 Node.js 24 内置的 `node:sqlite` 与 `node:http`，前端是原生 JavaScript + CSS，无需 npm install，也不需要构建步骤。
+网页版只使用 Node.js 24 内置模块，直接运行即可。Windows 桌面版自带运行环境。
 
 ---
 
 ## 快速开始
+
+### Windows 桌面版
+
+双击 `MHXX资料库.exe` 打开。EXE 内置 Node.js、数据库和图片，使用 Windows 的 WebView2 Runtime 显示界面。查阅资料和使用配装、存档工具可以离线完成。
+
+首次启动会在 EXE 旁创建 `MHXX资料库-data`。桌面版的护石库、配装和收藏也保存在这里。EXE 所在目录不可写时，程序改用 `%LOCALAPPDATA%\MHXX资料库`。浏览器里的记录需要在桌面版重新录入。
+
+在 Windows 上运行 `npm run build:windows` 可以重打包到 `dist/MHXX资料库.exe`（Windows x64）。首次打包会下载指定版本的 Node.js 和 WebView2 SDK，并校验文件。
+
+### 网页版
 
 ```powershell
 cd webapp
@@ -54,7 +64,7 @@ node server/server.js        # 或双击 start.cmd
 - **数据**：`data/mhxx_dex.sqlite`
 - **图片**：从原程序集资源中导出的 8,085 张图标/装备图，置于 `public/icons/`
 
-没有框架、没有打包器、没有第三方依赖，便于修改和长期维护。
+桌面版使用 WinForms 和 WebView2 封装同一套网页和数据。
 
 ## 存档编辑器
 
