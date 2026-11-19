@@ -80,6 +80,15 @@
 </div>
 
 <div id="modal" class="modal" hidden></div>
+<dialog id="skillPreview" class="skill-preview" aria-labelledby="skillPreviewName">
+  <article class="skill-preview-card">
+    <header class="skill-preview-head">
+      <div><h2 id="skillPreviewName">技能详情</h2><p id="skillPreviewPoints"></p></div>
+      <button type="button" class="btn sm" id="skillPreviewClose" autofocus>关闭</button>
+    </header>
+    <div class="skill-preview-body" id="skillPreviewBody"></div>
+  </article>
+</dialog>
 
 <script src="/forge.js?v=3"></script>
 <script src="/quests.js"></script>

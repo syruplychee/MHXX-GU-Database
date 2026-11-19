@@ -129,6 +129,7 @@ let routeToken = 0;
 async function route() {
   const token = ++routeToken;
   const { parts, params } = parseHash();
+  if ($('#skillPreview').open) $('#skillPreview').close();
   navActive(parts);
   $('#sidebar').classList.remove('open');
   window.scrollTo({ top: 0 });
@@ -832,6 +833,56 @@ async function weaponPage({ token }, id) {
 
 /* ============================================================ skill detail */
 
+const signedSkillPoints = (pt) => `${pt > 0 ? '+' : ''}${pt}`;
+
+function skillLevelRows(levels) {
+  return levels.map((level) => `
+    <div class="skill-line ${level.pt < 0 ? 'dim' : ''}">
+      <span><span class="name">${esc(level.name || '—')}</span> <span class="skill-threshold">(${signedSkillPoints(level.pt)})</span></span>
+      <span class="lv">${esc(level.des || '')}</span>
+    </div>`).join('');
+}
+
+function skillPreviewButton(id, points, content, className) {
+  return `<button type="button" class="${className} skill-preview-trigger" data-skill-id="${id}" data-skill-points="${points}" aria-haspopup="dialog">${content}</button>`;
+}
+
+function initSkillPreview() {
+  const dialog = $('#skillPreview');
+  const title = $('#skillPreviewName');
+  const points = $('#skillPreviewPoints');
+  const body = $('#skillPreviewBody');
+  let request = 0;
+
+  view.addEventListener('click', async (event) => {
+    const trigger = event.target.closest('[data-skill-id]');
+    if (!trigger) return;
+    const current = ++request;
+    title.textContent = '技能详情';
+    points.textContent = `这件装备提供 ${signedSkillPoints(Number(trigger.dataset.skillPoints))} 点`;
+    body.innerHTML = '<p class="skill-preview-message" role="status">正在读取技能…</p>';
+    dialog.showModal();
+    try {
+      const detail = await api('/skills/' + trigger.dataset.skillId);
+      if (!dialog.open || request !== current) return;
+      title.textContent = detail.data.name;
+      body.innerHTML = skillLevelRows(detail.levels);
+      body.scrollTop = 0;
+    } catch (error) {
+      if (dialog.open && request === current) {
+        body.innerHTML = `<p class="skill-preview-message" role="alert">读取技能失败：${esc(error.message)}</p>`;
+      }
+    }
+  });
+
+  $('#skillPreviewClose').addEventListener('click', () => dialog.close());
+  dialog.addEventListener('click', (event) => {
+    if (event.target !== dialog) return;
+    const { left, right, top, bottom } = dialog.getBoundingClientRect();
+    if (event.clientX < left || event.clientX > right || event.clientY < top || event.clientY > bottom) dialog.close();
+  });
+}
+
 async function skillPage({ token }, id) {
   view.innerHTML = `<div class="loading">加载中…</div>`;
   const d = await api(`/skills/${id}`);
@@ -842,11 +893,7 @@ async function skillPage({ token }, id) {
     <div class="page-head"><div><div class="eyebrow">Skill Tree #${id}</div><h1>${esc(d.data.name)}</h1>
       <div class="sub">${levels.length} 个等级 · 由 ${d.armor.length} 件防具 / ${d.jewels.length} 种装饰品提供</div></div></div>
 
-    ${section('等级与效果', `<div class="panel pad">${levels.map((l) => `
-      <div class="skill-line ${l.pt < 0 ? 'dim' : ''}">
-        <span><span class="name">${esc(l.name || '—')}</span> <span class="dim">(${l.pt > 0 ? '+' : ''}${l.pt})</span></span>
-        <span class="lv" style="max-width:60%;text-align:right">${esc(l.des || '')}</span>
-      </div>`).join('')}</div>`, levels.length)}
+    ${section('等级与效果', `<div class="panel pad">${skillLevelRows(levels)}</div>`, levels.length)}
 
     ${d.armor.length ? section('提供该技能的防具', simpleTable(['防具', '部位', '点数'], d.armor.map((r) => `<tr class="clickable" data-href="#/armor/${r.id}">
       <td><div class="cell-name"><span class="c-ico" style="width:22px;height:22px;font-size:11px">⛨</span><span class="nm">${esc(r.name)}</span></div></td>
@@ -873,8 +920,8 @@ async function jewelPage({ token }, id) {
         <h1>${esc(j.name)}</h1>
         <div class="tags">${'◉'.repeat(j.Slot || 0)} ${chip('价格 ' + num(j.Price))} ${j.rare ? rarity(j.rare) : ''}</div>
         <div class="skills-inline" style="margin-top:8px">
-          ${j.t1name ? `<a class="chip gold" href="#/skills/${j.SklTree1_ID}">${esc(j.t1name)} ${j.SklTree1_Pt > 0 ? '+' : ''}${j.SklTree1_Pt}</a>` : ''}
-          ${j.t2name ? `<a class="chip red" href="#/skills/${j.SklTree2_ID}">${esc(j.t2name)} ${j.SklTree2_Pt}</a>` : ''}
+          ${j.t1name ? skillPreviewButton(j.SklTree1_ID, j.SklTree1_Pt, `${esc(j.t1name)} ${signedSkillPoints(j.SklTree1_Pt)}`, 'chip gold') : ''}
+          ${j.t2name ? skillPreviewButton(j.SklTree2_ID, j.SklTree2_Pt, `${esc(j.t2name)} ${signedSkillPoints(j.SklTree2_Pt)}`, 'chip red') : ''}
         </div>
       </div>
     </div>
@@ -1282,6 +1329,7 @@ async function boot() {
   }
   initShell();
   initModal();
+  initSkillPreview();
   window.addEventListener('hashchange', route);
   if (!location.hash) location.hash = '#/';
   route();

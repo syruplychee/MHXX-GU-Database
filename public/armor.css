@@ -69,8 +69,8 @@
 .armor-points { display: flex; flex-wrap: wrap; gap: 3px 5px; margin-top: 1px; }
 .armor-total-label { align-self: center; color: var(--armor-mute); font-size: 10px; white-space: nowrap; }
 .armor-set-summary > .armor-total { display: flex; gap: 5px; align-items: baseline; }
-.armor-point { display: inline-block; padding: 1px 5px; border-radius: 4px; color: var(--armor-positive); background: #253b39; font-size: 11px; }
-.armor-point.armor-negative { color: #f9b5a9; background: #422d2d; }
+.armor-point, .armor-browser button.armor-point { display: inline-block; padding: 1px 5px; border-radius: 4px; color: var(--armor-positive); background: #253b39; font-size: 11px; }
+.armor-point.armor-negative, .armor-browser button.armor-negative { color: #f9b5a9; background: #422d2d; }
 .armor-point b { font-variant-numeric: tabular-nums; }
 .armor-members { margin: 0 7px 7px 23px; border: 1px solid var(--armor-line); border-radius: 6px; }
 .armor-members a { display: grid; grid-template-columns: 28px minmax(0, 1fr) auto; align-items: center; gap: 5px; padding: 5px 6px; font-size: 12px; background: var(--armor-inset); }

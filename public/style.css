@@ -337,8 +337,9 @@ table.grid tbody tr:last-child td { border-bottom: 0; }
 .summary .totals { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin: 12px 0; }
 .summary .totals .stat b { font-size: 17px; }
 .skill-line { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 5px 0; border-bottom: 1px dashed var(--line); font-size: 13px; }
-.skill-line .lv { color: var(--gold-2); font-size: 11.5px; }
+.skill-line .lv { color: var(--gold-2); font-size: 11.5px; max-width: 60%; text-align: right; }
 .skill-line .name { color: var(--text); }
+.skill-threshold { color: var(--muted); }
 .skill-line.dim { opacity: .55; }
 .muted { color: var(--muted); }
 .dim { color: var(--dim); }
@@ -390,6 +391,30 @@ table.grid tbody tr:last-child td { border-bottom: 0; }
 .pick-row .pr-sub { color: var(--dim); font-size: 11.5px; margin-top: 2px; }
 .pick-row .pr-meta { color: var(--muted); font-size: 12px; text-align: right; white-space: nowrap; }
 .modal-foot { padding: 10px 16px; border-top: 1px solid var(--line); display: flex; justify-content: space-between; color: var(--dim); font-size: 12px; }
+
+.skill-preview {
+  width: min(520px, calc(100% - 24px));
+  max-height: min(75dvh, 620px);
+  padding: 0;
+  color: var(--text);
+  background: var(--panel);
+  border: 1px solid var(--gold-dim);
+  border-radius: 12px;
+  box-shadow: var(--shadow);
+}
+.skill-preview::backdrop { background: #070a10ad; }
+.skill-preview-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; padding: 12px 15px; border-bottom: 1px solid var(--line); background: var(--panel-2); }
+.skill-preview-head h2 { margin: 0; color: var(--gold-2); font-size: 18px; }
+.skill-preview-head p { margin: 3px 0 0; color: var(--muted); font-size: 12px; }
+.skill-preview-body { padding: 5px 15px 11px; }
+.skill-preview-body .skill-line { display: grid; grid-template-columns: minmax(0, 1fr); gap: 2px; padding: 7px 0; }
+.skill-preview-body .skill-line:last-child { border-bottom: 0; }
+.skill-preview-body .skill-line .lv { max-width: none; text-align: left; color: var(--text); }
+.skill-preview-body .skill-line.dim { opacity: 1; }
+.skill-preview-body .skill-line.dim .skill-threshold { color: #e08d82; }
+.skill-preview-message { margin: 8px 0; color: var(--muted); }
+.skill-preview-trigger { cursor: pointer; }
+.skill-preview-trigger:hover { filter: brightness(1.18); }
 
 /* ---------------------------------------------------------------- misc */
 

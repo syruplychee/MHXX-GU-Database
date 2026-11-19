@@ -197,12 +197,12 @@ async function armorBrowserPage({ parts, params, token }) {
   ]);
 }
 
-function armorPointList(skills, links = false) {
+function armorPointList(skills, interactive = false) {
   if (!skills.length) return '<span class="armor-muted">无技能点</span>';
   return `<span class="armor-points">${skills.map((s) => {
-    const name = `${esc(s.name)} <b>${s.pt > 0 ? '+' : ''}${s.pt}</b>`;
+    const name = `${esc(s.name)} <b>${signedSkillPoints(s.pt)}</b>`;
     const cls = `armor-point${s.pt < 0 ? ' armor-negative' : ''}`;
-    return links ? `<a class="${cls}" href="#/skills/${s.treeId}">${name}</a>` : `<span class="${cls}">${name}</span>`;
+    return interactive ? skillPreviewButton(s.treeId, s.pt, name, cls) : `<span class="${cls}">${name}</span>`;
   }).join('')}</span>`;
 }
 
