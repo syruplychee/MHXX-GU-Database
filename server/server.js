@@ -541,6 +541,90 @@ function weaponDetail(req, res, id) {
 
 // ---------------------------------------------------------------- armor
 
+const armorSetsByLanguage = new Map();
+
+function armorSeriesName(pieces, lang) {
+  if (pieces.length === 1) return pieces[0].name;
+  const names = pieces.map((piece) => piece.name.normalize('NFKC').replace(/套[装裝]/g, ''));
+  let prefix = names[0];
+  for (const name of names.slice(1)) {
+    while (prefix && !name.startsWith(prefix)) prefix = prefix.slice(0, -1);
+  }
+  if (![1, 2, 3, 4].includes(lang)) prefix = prefix.replace(/\S+$/, '');
+  prefix = prefix.replace(/[\s・·-]+$/, '');
+  if (lang === 1 || lang === 2) prefix = prefix.replace(/之$/, '');
+  if (!prefix) return pieces[0].name;
+
+  const ranks = names.map((name) => name.match(/(?:^|[^A-Za-z])([A-Z]{1,2})$/)?.[1]);
+  const rank = ranks[0];
+  if (rank && ranks.every((value) => value === rank) && !prefix.endsWith(rank)) {
+    prefix += /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}]$/u.test(prefix) ? rank : ` ${rank}`;
+  }
+  return prefix;
+}
+
+function armorSetCatalog(lang) {
+  if (armorSetsByLanguage.has(lang)) return armorSetsByLanguage.get(lang);
+  const pieces = db.prepare(
+    `SELECT a.Amr_ID id, n.${L('Amr_Name', lang)} name, a.Part part, a.BorG borg, a.MorF morf, a.Rare rare,
+            a.Slot slot, a.Def def, a.MaxDef maxdef, a.Amr_ImgFile img
+     FROM DB_Amr a JOIN ID_Amr_Name n ON n.Amr_ID = a.Amr_ID WHERE a.Amr_ID > 0 ORDER BY a.Amr_ID`
+  ).all();
+  const skills = db.prepare(
+    `SELECT s.Amr_ID id, s.SklTree_ID treeId, t.${L('SklTree_Name', lang)} name, s.Pt pt
+     FROM DB_SklTreetoAmr s JOIN ID_SklTree_Name t ON t.SklTree_ID = s.SklTree_ID`
+  ).all();
+  const skillsByPiece = Map.groupBy(skills, (skill) => skill.id);
+  // Every image ID has at most one piece per slot, including shared heads in class-specific sets.
+  const sets = [...Map.groupBy(pieces, (piece) => piece.img).values()].map((entries) => {
+    const first = entries[0];
+    const totals = new Map();
+    for (const piece of entries) {
+      for (const { treeId, name, pt } of skillsByPiece.get(piece.id) || []) {
+        const total = totals.get(treeId);
+        if (total) total.pt += pt;
+        else totals.set(treeId, { treeId, name, pt });
+      }
+    }
+    return {
+      id: first.id, img: first.img, name: armorSeriesName(entries, lang), rare: first.rare,
+      borg: Math.max(...entries.map((piece) => piece.borg)), morf: Math.max(...entries.map((piece) => piece.morf)),
+      pieces: entries.sort((a, b) => a.part - b.part),
+      skills: [...totals.values()].sort((a, b) => b.pt - a.pt || a.treeId - b.treeId),
+    };
+  });
+  armorSetsByLanguage.set(lang, sets);
+  return sets;
+}
+
+function listArmorSets(req, res) {
+  const p = new URL(req.url, 'http://x').searchParams;
+  const lang = clampLang(p.get('lang'));
+  const q = (p.get('q') || '').trim().normalize('NFKC').toLowerCase().replace(/套[装裝]/g, '');
+  const borg = p.get('borg');
+  const morf = p.get('morf');
+  const rare = p.get('rarity');
+  const skill = int(p.get('skill'));
+  const part = p.get('part');
+  const slot = p.get('slot');
+  const valid = (raw) => raw !== null && raw !== '' && raw !== 'all';
+  const matchesName = (name) => name.normalize('NFKC').toLowerCase().replace(/套[装裝]/g, '').includes(q);
+  const compatible = (setValue, filter) => !valid(filter) || setValue === 0 || setValue === Number(filter);
+
+  const rows = [];
+  for (const set of armorSetCatalog(lang)) {
+    if (!compatible(set.borg, borg) || !compatible(set.morf, morf)) continue;
+    if (valid(rare) && set.rare !== Number(rare)) continue;
+    if (skill && !set.skills.some((s) => s.treeId === skill && s.pt > 0)) continue;
+    const wholeName = !q || matchesName(set.name);
+    const matches = set.pieces.filter((piece) => (wholeName || matchesName(piece.name)) &&
+      (!valid(part) || piece.part === Number(part)) && (!valid(slot) || piece.slot === Number(slot))).map((piece) => piece.id);
+    if (matches.length) rows.push({ ...set, matches });
+  }
+
+  json(res, 200, { total: rows.length, rows });
+}
+
 function listArmor(req, res) {
   const url = new URL(req.url, 'http://x');
   const lang = clampLang(url.searchParams.get('lang'));
@@ -627,10 +711,10 @@ function armorDetail(req, res, id) {
     .prepare(
       `SELECT a.Amr_ID id, n.${L('Amr_Name', lang)} name, a.Part part, a.Rare rare
        FROM DB_Amr a JOIN ID_Amr_Name n ON n.Amr_ID = a.Amr_ID
-       WHERE a.Amr_ImgFile = ? AND a.BorG = ? AND a.MorF = ?
-       ORDER BY a.Part, a.Amr_ID LIMIT 12`
+       WHERE a.Amr_ImgFile = ?
+       ORDER BY a.Part, a.Amr_ID`
     )
-    .all(base.Amr_ImgFile, base.BorG, base.MorF);
+    .all(base.Amr_ImgFile);
 
   json(res, 200, { data: base, skills, materials, family });
 }
@@ -1551,6 +1635,7 @@ const routes = [
   [/^\/api\/weapons$/, listWeapons],
   [/^\/api\/weapons\/(\d+)$/, (req, res, m) => weaponDetail(req, res, int(m[1]))],
   [/^\/api\/armor$/, listArmor],
+  [/^\/api\/armor\/sets$/, listArmorSets],
   [/^\/api\/armor\/(\d+)$/, (req, res, m) => armorDetail(req, res, int(m[1]))],
   [/^\/api\/skills$/, listSkills],
   [/^\/api\/skills\/(\d+)$/, (req, res, m) => skillDetail(req, res, int(m[1]))],

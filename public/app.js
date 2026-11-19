@@ -151,7 +151,7 @@ async function route() {
         if (parts[1] === 'tree' && params.view === 'list') return go(weaponsTreeListPage);
         if (!parts[1] || parts[1] === 'tree') return go(weaponForgePage);
         return go((c) => weaponPage(c, +parts[1]));
-      case 'armor': return parts[1] ? go((c) => armorDetailPage(c, +parts[1])) : go(armorListPage);
+      case 'armor': return go(armorBrowserPage);
       case 'skills': return parts[1] ? go((c) => skillPage(c, +parts[1])) : go(skillsPage);
       case 'jewels': return parts[1] ? go((c) => jewelPage(c, +parts[1])) : go(jewelsPage);
       case 'quests': return go(questBrowserPage);
@@ -508,30 +508,6 @@ async function weaponsTreeListPage({ params, token }) {
   });
 }
 
-function armorListPage({ params, token }) {
-  return listPage({
-    params, token, eyebrow: 'Armor', title: '防具', sub: '头 / 胸 / 腕 / 腰 / 脚 · 剑士 / 枪手 · 男女',
-    filters: [
-      filterSearch(params),
-      filterSelect('part', '部位', (S.meta.armorParts || []).map((p) => [p.id, p.name]), params),
-      filterSelect('borg', '剑/枪', [[1, '剑士'], [2, '枪手'], [0, '共通']], params),
-      filterSelect('morf', '性别', [[1, '男性'], [2, '女性'], [0, '共通']], params),
-      filterSelect('slot', '孔位', [[0, '0 孔'], [1, '1 孔'], [2, '2 孔'], [3, '3 孔']], params),
-      filterSelect('rarity', '稀有度', Array.from({ length: 10 }, (_, i) => [i + 1, 'R' + (i + 1)]), params),
-    ],
-    fetch: (p) => api('/armor', { q: p.q, part: p.part, borg: p.borg, morf: p.morf, slot: p.slot, rarity: p.rarity, page: p.page }),
-    href: (r) => `#/armor/${r.id}`,
-    columns: [
-      { label: '防具', render: (r) => `<div class="cell-name">${armorIcon(r.img, r.morf)}<span><span class="nm">${esc(r.name)}</span><span class="sub">${esc(armorPartName(r.part))} · ${esc(borgName(r.borg))} · ${esc(morfName(r.morf))}</span></span></div>` },
-      { label: '防御', cls: 'num', render: (r) => `${r.def}<span class="dim">/${r.maxdef}</span>` },
-      { label: '火水雷冰龙', cls: 'num', render: (r) => `<span class="mono">${[r.fir, r.wtr, r.thd, r.ice, r.drg].map((v) => `<span class="${v > 0 ? 'pos' : v < 0 ? 'neg' : 'dim'}">${v}</span>`).join(' ')}</span>` },
-      { label: '孔', cls: 'num', render: (r) => (r.slot ? '◉'.repeat(r.slot) : '<span class="dim">—</span>') },
-      { label: '技能', render: (r) => (r.skills ? `<span class="dim" style="font-size:12px">${esc(r.skills)}</span>` : '<span class="dim">—</span>') },
-      { label: '稀有', cls: 'num', render: (r) => rarity(r.rare) },
-    ],
-  });
-}
-
 function skillsPage({ params, token }) {
   return listPage({
     params, token, eyebrow: 'Skills', title: '技能', sub: '技能树、等级阈值与效果说明',
@@ -865,38 +841,6 @@ async function weaponPage({ token }, id) {
       <div class="rel-line"><span class="label">可派生</span>${d.tree.children.length ? d.tree.children.map((c) => `<a class="chip" href="#/weapons/${c.id}">${esc(c.name)}</a>`).join('') : '<span class="dim">无（最终强化）</span>'}</div>
       ${d.tree.ancestors.length > 1 ? `<div class="rel-line"><span class="label">升级路径</span><span class="dim">${d.tree.ancestors.map((a) => `<a href="#/weapons/${a.id}">${esc(a.name)}</a>`).join(' → ')} → <b style="color:var(--gold-2)">${esc(w.name)}</b></span></div>` : ''}
     </div>`) : ''}
-  `;
-}
-
-/* ============================================================ armor detail */
-
-async function armorDetailPage({ token }, id) {
-  view.innerHTML = `<div class="loading">加载中…</div>`;
-  const d = await api(`/armor/${id}`);
-  if (token !== routeToken) return;
-  const a = d.data;
-  view.innerHTML = `
-    ${crumbs([['#/armor', '防具'], ['#/armor?part=' + a.Part, armorPartName(a.Part)], [null, a.name]])}
-    <div class="detail-hero">
-      <div class="detail-art"><div class="art-box">${ic(a.Amr_ImgFile + (a.MorF === 2 ? '_F' : '_M'), 'img-art')}</div></div>
-      <div class="detail-info">
-        <div class="eyebrow">#${a.Amr_ID} · ${esc(armorPartName(a.Part))}</div>
-        <h1>${esc(a.name)}</h1>
-        <div class="tags">${rarity(a.Rare)} ${tag(armorPartName(a.Part))} ${tag(borgName(a.BorG))} ${tag(morfName(a.MorF))} ${a.Slot ? chip('孔位 ' + '◉'.repeat(a.Slot)) : chip('无孔')}</div>
-        <div class="stat-grid">
-          ${statBox('防御', a.Def, 'gold')}${statBox('最大防御', a.MaxDef)}${statBox('孔位', a.Slot)}${statBox('价格', num(a.Price) + 'z')}
-        </div>
-        <div style="margin-top:14px">${resGrid(a)}</div>
-      </div>
-    </div>
-
-    ${section('技能', d.skills.length ? `<div class="panel pad"><div class="skills-inline">${d.skills.map((s) => `<a class="chip ${s.pt < 0 ? 'red' : 'gold'}" href="#/skills/${s.treeId}">${esc(s.name)} ${s.pt > 0 ? '+' : ''}${s.pt}</a>`).join('')}</div></div>` : '<div class="panel pad empty">无技能</div>')}
-
-    ${d.materials.length ? section('生产素材', simpleTable(['素材', '数量'], d.materials.map((m) => `<tr class="clickable" data-href="#/items/${m.id}">
-      <td><div class="cell-name">${itemIcon(m.id)}<span class="nm">${esc(m.name)}</span></div></td><td class="num">${num(m.qty)}</td></tr>`)), d.materials.length) : ''}
-
-    ${d.family.length ? section('同系列', `<div class="cards">${d.family.map((f) => `<a class="card" href="#/armor/${f.id}">
-      <span class="c-ico">⛨</span><span><b>${esc(f.name)}</b><small>${esc(armorPartName(f.part))} · R${f.rare}</small></span></a>`).join('')}</div>`) : ''}
   `;
 }
 
