@@ -413,31 +413,30 @@ const SaveEditorCore = (() => {
         const pattern = patch[fields.pattern] ?? cat[fields.pattern];
         const edited = patch[fields.learned] ?? cat[fields.learned];
         if (pattern === cat[fields.pattern] && same(edited, cat[fields.learned])) continue;
-        if (cat.dlc || palicoRules.audit(cat, catalog).length) throw new Error('配信猫或特殊组合的原始已学栏需保留。');
+        if (cat.dlc || palicoRules.describe(cat, kind, catalog).defects.length) {
+          throw new Error('配信猫或特殊组合的原始已学栏需保留。');
+        }
         const profile = { ...cat, [fields.pattern]: pattern };
         const rule = palicoRules.describe(profile, kind, catalog);
         if (!rule.sequence || edited.length !== rule.expected ||
             !same(edited.slice(0, rule.fixed), cat[fields.learned].slice(0, rule.fixed))) {
           throw new Error(`${rule.prefix}组合长度或固有项与原生表不符。`);
         }
-        const taughtAt = edited.length - rule.transfer;
-        const taught = edited.slice(taughtAt).filter(Boolean);
+        const taught = edited.slice(-rule.transfer);
         if (kind === 'skills' && taught.some(id => catalog.palico.skills[id]?.[4] === 'special')) {
           const known = this.knownSpecialSkills(slot, catalog);
           if (taught.some(id => catalog.palico.skills[id]?.[4] === 'special' && !known.includes(id))) {
             throw new Error('只能传授当前角色的艾露猫已会的配信技能。');
           }
         }
-        const learned = [...edited.slice(0, taughtAt), ...taught, ...Array(rule.transfer - taught.length).fill(0)];
+        const learned = palicoRules.packTransfers(edited, rule);
         const physical = [...learned, ...Array(fields.physical - learned.length).fill(rule.sentinel)];
         Object.assign(current, { [fields.learned]: learned, [fields.pattern]: pattern, [fields.length]: learned.length, [fields.raw]: physical });
+        const issues = palicoRules.describe(current, kind, catalog).defects;
+        if (issues.length) throw new Error(issues.join(' '));
         next.set(physical, offset);
         next.set([pattern, learned.length], patternOffset);
         learnedChanged = true;
-      }
-      if (learnedChanged) {
-        const issues = palicoRules.audit(current, catalog);
-        if (issues.length) throw new Error(issues.join(' '));
       }
       const moves = patch.equippedMoves ?? cat.equippedMoves;
       const skills = patch.equippedSkills ?? cat.equippedSkills;

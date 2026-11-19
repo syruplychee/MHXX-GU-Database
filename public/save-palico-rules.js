@@ -6,6 +6,14 @@ const SavePalicoRules = (() => {
     skills: { learned: 'learnedSkills', pattern: 'skillPattern', length: 'skillLength', raw: 'rawSkills', physical: 12 },
   };
 
+  const transferEmpty = (id, sentinel) => id === 0 || id === sentinel;
+
+  function packTransfers(learned, rule) {
+    const trained = learned.slice(-rule.transfer);
+    const empty = id => transferEmpty(id, rule.sentinel);
+    return [...learned.slice(0, -rule.transfer), ...trained.filter(id => !empty(id)), ...trained.filter(empty)];
+  }
+
   function describe(cat, kind, catalog) {
     const fields = columns[kind];
     const native = catalog.palico.native;
@@ -36,11 +44,12 @@ const SavePalicoRules = (() => {
     for (const [i, group] of [...sequence].entries()) {
       if (abilities[learned[fixed + i]]?.[1] !== group) defects.push(`${prefix}第 ${fixed + i + 1} 格应属于 ${group} 组。`);
     }
-    const occupied = learned.filter(Boolean);
+    const transferAt = fixed + sequence.length;
+    const occupied = learned.filter((id, i) => id && !(i >= transferAt && transferEmpty(id, sentinel)));
     if (new Set(occupied).size !== occupied.length) defects.push(`${prefix}已学项重复。`);
     let gap = false;
-    for (const id of learned.slice(fixed + sequence.length)) {
-      if (id === 0) gap = true;
+    for (const id of learned.slice(transferAt)) {
+      if (transferEmpty(id, sentinel)) gap = true;
       else if (gap || !abilities[id]?.[2]) {
         defects.push(`${prefix}传授栏有间隔或不可传授的项目。`);
         break;
@@ -64,7 +73,8 @@ const SavePalicoRules = (() => {
       if (group) return entry[1] === group ? [id] : [];
       return entry[2] && (entry[4] !== 'special' || id === list[index] || knownSpecial.includes(id)) ? [id] : [];
     });
-    return group ? ids : [0, ...ids];
+    const blank = transferEmpty(list[index], rule.sentinel) ? list[index] : 0;
+    return group ? ids : [blank, ...ids];
   }
 
   function changePattern(cat, kind, id, catalog) {
@@ -95,7 +105,7 @@ const SavePalicoRules = (() => {
       usedSkills: costs.every(Number.isInteger) ? costs.reduce((sum, cost) => sum + cost, 0) : null };
   }
 
-  return { columns, describe, audit, options, changePattern, capacity };
+  return { columns, describe, audit, options, changePattern, capacity, packTransfers, transferEmpty };
 })();
 
 if (typeof module !== 'undefined') module.exports = SavePalicoRules;

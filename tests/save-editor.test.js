@@ -328,6 +328,40 @@ test('艾露猫生成编号、固有项、传授来源、装备容量和原始�
   assert.throws(() => special.setPalico(0, 0, { movePattern: 0 }, catalog), /原始已学栏/);
 });
 
+test('领导猫传授栏可保留 57/96 空位，异常技能列不会锁住行动列', () => {
+  const file = fixture('switch-gu', [0], 0);
+  const base = fixtures['switch-gu'].header + fixtures['switch-gu'].bases[0];
+  const at = base + 0x23BB6;
+  file.write('测试领导猫', at);
+  file.fill(57, at + 0x38, at + 0x48);
+  file.fill(96, at + 0x48, at + 0x54);
+  file.set([31, 9, 1, 4, 22, 55, 33, 32, 6, 2, 57], at + 0x38);
+  file.set([45, 38, 21, 20, 40, 1, 96, 96], at + 0x48);
+  file.set([3, 11, 6, 8], at + 0x54);
+  const save = openSave(file);
+  const cat = save.palico(0, 0);
+  assert.deepEqual(palicoRules.audit(cat, catalog), []);
+  assert.equal(palicoRules.options(cat, 'moves', 10, catalog)[0], 57);
+  const moves = palicoRules.changePattern(cat, 'moves', 7, catalog);
+  const skills = palicoRules.changePattern(cat, 'skills', 1, catalog);
+  assert(save.setPalico(0, 0, { ...moves, ...skills }, catalog));
+  const converted = save.palico(0, 0);
+  assert.equal(converted.movePattern, 7);
+  assert.equal(converted.skillPattern, 1);
+  assert.deepEqual(converted.learnedMoves.slice(-3), [6, 2, 57]);
+  assert.deepEqual(converted.learnedSkills.slice(-2), [96, 96]);
+  assert.deepEqual(palicoRules.audit(converted, catalog), []);
+
+  file[at + 0x48 + 3] = 91;
+  const mixed = openSave(file);
+  const original = mixed.palico(0, 0);
+  assert.deepEqual(palicoRules.describe(original, 'moves', catalog).defects, []);
+  assert.match(palicoRules.describe(original, 'skills', catalog).defects[0], /B 组/);
+  assert(mixed.setPalico(0, 0, palicoRules.changePattern(original, 'moves', 7, catalog), catalog));
+  assert.deepEqual(mixed.palico(0, 0).rawSkills, original.rawSkills);
+  assert.throws(() => mixed.setPalico(0, 0, { skillPattern: 1 }, catalog), /原始已学栏/);
+});
+
 function questArc(id, gu) {
   const primary = Buffer.alloc(gu ? 0x171 : 0xF9);
   primary.writeUInt32LE(0x434B0000);

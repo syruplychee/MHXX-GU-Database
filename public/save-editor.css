@@ -152,7 +152,7 @@
 .save-cat-abilities h3 { margin: 5px 0 8px; font-size: 13px; }
 .save-checklist, .save-learned-list { display: grid; gap: 5px; }
 .save-checklist input { accent-color: var(--gold); }
-.save-learned-list .save-field { grid-template-columns: 18px minmax(0, 1fr); align-items: center; }
+.save-learned-list .save-field { grid-template-columns: 32px minmax(0, 1fr); align-items: center; }
 .save-learned-list { margin-top: 8px; }
 .save-quest-page { display: grid; gap: 14px; }
 .save-quest-columns { display: grid; grid-template-columns: minmax(0, .95fr) minmax(0, 1.75fr); gap: 14px; align-items: start; }
