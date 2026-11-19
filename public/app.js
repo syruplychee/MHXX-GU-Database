@@ -170,6 +170,7 @@ async function route() {
       case 'awards': return go(awardsPage);
       case 'hfh': return go(hfhPage);
       case 'set': return go(setWorkspacePage);
+      case 'save-editor': return go(saveEditorPage);
       default: return go(homePage);
     }
   } catch (err) {

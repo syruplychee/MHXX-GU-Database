@@ -206,6 +206,20 @@ function listItems(req, res) {
   });
 }
 
+function saveItems(req, res) {
+  const lang = clampLang(new URL(req.url, 'http://x').searchParams.get('lang'));
+  const rows = db.prepare(`
+    SELECT i.Hex hex, ${itemName(lang)} name, n.Itm_Name_3 japanese, n.Itm_Name_0 english
+    FROM DB_Itm i JOIN ID_Itm_Name n ON n.Itm_ID = i.Itm_ID
+    WHERE i.Itm_ID > 0 ORDER BY i.Itm_ID
+  `).all().map(({ hex, name, japanese, english }) => ({
+    id: Number.parseInt(hex, 16),
+    name: name || japanese || english,
+    dummy: /dummy|ダミー/i.test(`${english || ''} ${japanese || ''}`),
+  })).filter(({ id, name }) => id > 0 && id <= 0xFFF && name);
+  return json(res, 200, { rows });
+}
+
 function itemDetail(req, res, id) {
   const lang = clampLang(new URL(req.url, 'http://x').searchParams.get('lang'));
   const nc = L('Itm_Name', lang);
@@ -1686,6 +1700,7 @@ function computeSet(res, body) {
 const routes = [
   [/^\/api\/meta$/, (req, res) => json(res, 200, meta())],
   [/^\/api\/items$/, listItems],
+  [/^\/api\/save-items$/, saveItems],
   [/^\/api\/items\/(\d+)$/, (req, res, m) => itemDetail(req, res, int(m[1]))],
   [/^\/api\/weapons\/tree$/, weaponsTree],
   [/^\/api\/weapons$/, listWeapons],
