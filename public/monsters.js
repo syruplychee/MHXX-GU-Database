@@ -3,11 +3,14 @@
 const MONSTER_TYPES = [['large', '大型怪物'], ['small', '小型怪物']];
 const MONSTER_RANKS = [['1', '下位'], ['2', '上位'], ['3', 'G 位'], ['special', '特殊许可']];
 const MONSTER_BODY_TABS = [['parts', '肉质'], ['status', '状态与陷阱'], ['quests', '相关任务']];
+const MONSTER_REFERENCE = 'https://github.com/jestar719/mhgu/blob/fb8878ea2e0ff4c2848d7d9599ceb2f1279700ff/app/src/main/assets/mhxx/data/';
+const MONSTER_REFERENCE_PAGES = { 124: 2879, 127: 2993, 128: 2994, 129: 2995 };
 
-function monsterHref(id, kind = '', q = '') {
+function monsterHref(id, kind = '', q = '', form = '') {
   const query = new URLSearchParams();
   if (kind) query.set('kind', kind);
   if (q) query.set('q', q);
+  if (form) query.set('form', form);
   return '#/monsters' + (id ? `/${id}` : '') + (query.size ? `?${query}` : '');
 }
 
@@ -20,6 +23,7 @@ async function monsterBrowserPage({ parts, params, token }) {
   let kind = roster.some(([id]) => id === params.kind) ? params.kind : '';
   let query = params.q || '';
   let selected = Number(parts[1]) || 0;
+  let form = selected === 39 && params.form === 'mech' ? 'mech' : '';
   let tab = 'parts';
   let preferredRank = '1';
   let detail;
@@ -60,11 +64,13 @@ async function monsterBrowserPage({ parts, params, token }) {
   const result = await api('/monsters', { size: 200 });
   if (token !== routeToken) return;
 
-  const syncURL = () => history.replaceState(null, '', monsterHref(selected, kind, query));
+  const entries = result.rows.flatMap((m) => m.id === 39 ? [m, { ...m, name: `${m.name}·机甲`, form: 'mech' }] : [m]);
+  const syncURL = () => history.replaceState(null, '', monsterHref(selected, kind, query, form));
+  const rowFor = (id, variant) => $(`[data-monster-id="${id}"][data-monster-form="${variant}"]`, list);
 
   function renderTab() {
     for (const button of $$('[data-monster-tab]', tabs)) button.setAttribute('aria-pressed', button.dataset.monsterTab === tab);
-    if (tab === 'parts') body.innerHTML = monsterParts(detail);
+    if (tab === 'parts') body.innerHTML = monsterParts(detail, form);
     if (tab === 'status') body.innerHTML = monsterStatus(detail);
     if (tab === 'quests') body.innerHTML = monsterQuests(detail.quests);
     body.scrollTop = 0;
@@ -83,14 +89,26 @@ async function monsterBrowserPage({ parts, params, token }) {
     drops.scrollTop = 0;
   }
 
-  async function selectMonster(id, { reveal = false, save = false } = {}) {
-    for (const row of $$('[aria-current]', list)) row.removeAttribute('aria-current');
-    const active = $(`[data-monster-id="${id}"]`, list);
-    active?.setAttribute('aria-current', 'true');
-    if (save) { selected = id; syncURL(); }
-    if (id === detail?.data.id) return;
-    const request = ++detailRequest;
+  function renderProfile() {
+    const m = detail.data;
+    const name = form === 'mech' ? `${m.name}·机甲` : m.name;
+    profile.innerHTML = `${monBig(m.id)}<div><h2>${esc(name)}</h2><span>${typeName(m.kind)} · ${num(detail.quests.length)} 项相关任务</span></div>
+      <div class="monster-mobile-actions"><button type="button" data-monster-jump="list">列表 ↑</button><button type="button" data-monster-jump="loot">素材 ↓</button></div>`;
+  }
+
+  async function selectMonster(id, { reveal = false, save = false, variant = '' } = {}) {
+    const changedForm = form !== variant;
+    form = variant;
     selected = id;
+    if (changedForm) tab = 'parts';
+    for (const row of $$('[aria-current]', list)) row.removeAttribute('aria-current');
+    rowFor(id, form)?.setAttribute('aria-current', 'true');
+    if (save) syncURL();
+    if (id === detail?.data.id) {
+      if (changedForm) { renderProfile(); renderTab(); }
+      return;
+    }
+    const request = ++detailRequest;
     detail = null;
     profile.hidden = tabs.hidden = ranks.hidden = true;
     lootCount.textContent = '';
@@ -101,9 +119,7 @@ async function monsterBrowserPage({ parts, params, token }) {
       const data = await api('/monsters/' + id);
       if (token !== routeToken || request !== detailRequest) return;
       detail = data;
-      const m = data.data;
-      profile.innerHTML = `${monBig(m.id)}<div><h2>${esc(m.name)}</h2><span>${typeName(m.kind)} · ${num(data.quests.length)} 项相关任务</span></div>
-        <div class="monster-mobile-actions"><button type="button" data-monster-jump="list">列表 ↑</button><button type="button" data-monster-jump="loot">素材 ↓</button></div>`;
+      renderProfile();
       profile.hidden = tabs.hidden = false;
       renderTab();
       renderLoot();
@@ -117,18 +133,20 @@ async function monsterBrowserPage({ parts, params, token }) {
 
   function renderList({ initial = false } = {}) {
     const keyword = query.toLowerCase();
-    const rows = result.rows.filter((m) => (!kind || m.kind === kind) && m.name.toLowerCase().includes(keyword));
-    $('#monsterCount').textContent = `${num(rows.length)} 只`;
+    const rows = entries.filter((m) => (!kind || m.kind === kind) && m.name.toLowerCase().includes(keyword));
+    const count = (records) => new Set(records.map((m) => m.id)).size;
+    $('#monsterCount').textContent = `${num(count(rows))} 只`;
     list.innerHTML = rows.length ? MONSTER_TYPES.map(([id, name]) => {
       const entries = rows.filter((m) => m.kind === id);
-      return entries.length ? `<h3>${name} <small>${entries.length}</small></h3>${entries.map((m) =>
-        `<a class="monster-entry" href="${esc(monsterHref(m.id, kind, query))}" data-monster-id="${m.id}">${monIcon(m.id)}<span>${esc(m.name)}</span></a>`).join('')}` : '';
+      return entries.length ? `<h3>${name} <small>${count(entries)}</small></h3>${entries.map((m) =>
+        `<a class="monster-entry${m.form ? ' monster-entry-variant' : ''}" href="${esc(monsterHref(m.id, kind, query, m.form))}" data-monster-id="${m.id}" data-monster-form="${m.form || ''}">${monIcon(m.id)}<span>${esc(m.name)}</span></a>`).join('')}` : '';
     }).join('') : '<p class="monster-empty">没有符合条件的怪物。</p>';
     list.scrollTop = 0;
-    const target = (initial && selected) || rows.find((m) => m.id === selected)?.id || rows[0]?.id || 0;
-    selectMonster(target, { save: !initial });
-    if (initial && target === Number(parts[1])) {
-      const active = $(`[data-monster-id="${target}"]`, list);
+    const current = rows.find((m) => m.id === selected && (m.form || '') === form);
+    const target = initial && selected ? { id: selected, form } : current || rows[0];
+    selectMonster(target?.id || 0, { save: !initial, variant: target?.form || '' });
+    if (initial && target?.id === Number(parts[1])) {
+      const active = rowFor(target.id, target.form || '');
       if (active) list.scrollTop = active.getBoundingClientRect().top - list.getBoundingClientRect().top - 38;
     }
   }
@@ -147,7 +165,14 @@ async function monsterBrowserPage({ parts, params, token }) {
     event.preventDefault();
     const id = Number(link.dataset.monsterId);
     if (id === detail?.data.id && matchMedia('(max-width: 1000px)').matches) detailPane.scrollIntoView({ block: 'start' });
-    selectMonster(id, { reveal: true, save: true });
+    selectMonster(id, { reveal: true, save: true, variant: link.dataset.monsterForm });
+  });
+  body.addEventListener('click', (event) => {
+    const button = event.target.closest('[data-monster-form-pick]');
+    if (!button || button.dataset.monsterFormPick === form) return;
+    const variant = button.dataset.monsterFormPick;
+    selectMonster(39, { save: true, variant });
+    $(`[data-monster-form-pick="${variant}"]`, body)?.focus({ preventScroll: true });
   });
   tabs.addEventListener('click', (event) => {
     const button = event.target.closest('[data-monster-tab]');
@@ -173,16 +198,22 @@ function monsterSection(title, html) {
   return `<section class="monster-block"><h3>${title}</h3>${html}</section>`;
 }
 
-function monsterParts(d) {
+function monsterParts(d, form) {
   const m = d.data;
+  const isAhtal = m.id === 39;
+  const mech = form === 'mech';
+  const rows = isAhtal ? d.weak.filter((row) => mech ? row.num >= 8 : row.num < 8) : d.weak;
+  const sourceLink = (id) => `<a class="monster-source-link" href="${MONSTER_REFERENCE}${id}.html" target="_blank" rel="noopener">MHGU 资料页 ↗</a>`;
+  const forms = isAhtal ? `<div class="monster-buttons monster-forms" role="group" aria-label="阁螳螂形态">${monsterButtons([['', '本体'], ['mech', '机甲']], 'form-pick', form)}${sourceLink(mech ? 3002 : 2992)}</div>` : '';
   const columns = [['切', 'cut', '切断'], ['打', 'impact', '打击'], ['弹', 'shot', '射击'], ['火', 'fir'], ['水', 'wtr'], ['雷', 'thd'], ['冰', 'ice'], ['龙', 'drg'], ['晕', 'diz', '眩晕']];
-  const artUrl = m.diagram ? `/icons/${encodeURIComponent(m.diagram)}?v=original` : '';
+  const artUrl = m.diagram && !mech ? `/icons/${encodeURIComponent(m.diagram)}?v=original` : '';
   const diagram = artUrl ? `<figure class="monster-diagram"><a href="${artUrl}" target="_blank" rel="noopener" aria-label="查看${esc(m.name)}原版肉质示意图"><img src="${artUrl}" class="monster-part-image" alt="" decoding="async"></a><figcaption>按编号对照肉质表 · <a href="${artUrl}" target="_blank" rel="noopener">查看大图 ↗</a></figcaption></figure>`
-    : m.kind === 'large' ? '<p class="monster-empty">桌面版未收录这只怪物的部位示意图。</p>' : '';
+    : mech ? '<p class="monster-empty">两套资料均未收录机甲的编号示意图，部位肉质见下表。</p>'
+      : m.kind === 'large' ? `<p class="monster-empty">桌面版未收录这只怪物的部位示意图。${MONSTER_REFERENCE_PAGES[m.id] ? ' ' + sourceLink(MONSTER_REFERENCE_PAGES[m.id]) : ''}</p>` : '';
   if (!d.weak.length) return `${diagram}<p class="monster-empty">没有已记录的肉质数据。</p>`;
-  return monsterSection('部位肉质', `${diagram}<div class="monster-table-wrap"><table class="monster-table monster-hitzones">
+  return monsterSection('部位肉质', `${forms}${diagram}<div class="monster-table-wrap"><table class="monster-table monster-hitzones">
     <thead><tr><th scope="col">#</th><th scope="col">部位</th>${columns.map(([label, , title]) => `<th scope="col" title="${title || label}">${label}</th>`).join('')}</tr></thead><tbody>
-    ${d.weak.map((row) => `<tr><td class="monster-number">${row.num}</td><th scope="row">${esc(row.part || '—')}${row.condition && row.condition !== '---' ? `<small>${esc(row.condition)}</small>` : ''}</th>${columns.map(([, key]) => {
+    ${rows.map((row) => `<tr><td class="monster-number">${row.num}</td><th scope="row">${esc(row.part || '—')}${row.condition && row.condition !== '---' ? `<small>${esc(row.condition)}</small>` : ''}</th>${columns.map(([, key]) => {
       const value = row[key];
       return `<td class="${value >= 45 && key !== 'diz' ? 'monster-high' : ''}">${value == null || value < 0 ? '—' : value}</td>`;
     }).join('')}</tr>`).join('')}</tbody></table></div>`);

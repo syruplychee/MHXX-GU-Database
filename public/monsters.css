@@ -38,6 +38,7 @@
 .monster-entry[aria-current="true"], .monster-entry:hover { color: var(--monster-accent); background: #312c24; }
 .monster-entry[aria-current="true"] { box-shadow: inset 3px 0 var(--monster-accent); }
 .monster-entry img { flex: 0 0 16px; }
+.monster-entry-variant { padding-left: 19px; font-size: 12px; }
 .monster-empty { padding: 8px 10px; margin: 0; color: var(--monster-muted); font-size: 12px; }
 
 .monster-profile { display: flex; gap: 8px; align-items: center; border-bottom: 1px solid var(--monster-line); padding: 7px 9px; background: #222d32; }
@@ -50,6 +51,8 @@
 .monster-content { padding: 7px; }
 .monster-block { margin-bottom: 7px; border: 1px solid var(--monster-line); border-radius: 6px; overflow: hidden; }
 .monster-block h3 { padding: 5px 7px; margin: 0; color: var(--monster-accent); background: #232d2e; font-size: 12px; }
+.monster-forms { align-items: center; padding: 5px 7px; border-bottom: 1px solid var(--monster-line); }
+.monster-source-link { margin-left: 4px; color: var(--monster-accent); font-size: 11px; }
 .monster-diagram { margin: 0; padding: 6px; border-bottom: 1px solid var(--monster-line); background: #242f33; }
 .monster-diagram > a { display: grid; place-items: center; border-radius: 4px; background: #dadbd0; }
 .monster-part-image { display: block; max-width: 100%; max-height: 215px; object-fit: contain; }
