@@ -168,7 +168,7 @@ async function route() {
       case 'locations': return go(locationGuidePage);
       case 'awards': return go(awardsPage);
       case 'hfh': return go(hfhPage);
-      case 'set': return go(setPage);
+      case 'set': return go(setWorkspacePage);
       default: return go(homePage);
     }
   } catch (err) {
@@ -947,6 +947,7 @@ async function skillOptions() {
 
 async function setPage({ token }) {
   view.innerHTML = `${headHTML('Loadout', '配装器', '选择 5 件防具 + 护石，实时计算防御、耐性与技能')}
+    ${loadoutTabs('manual')}
     <div class="toolbar">
       <label class="field"><span>剑士 / 枪手</span><select id="setBorg"><option value="1" ${S.set.borg === 1 ? 'selected' : ''}>剑士</option><option value="2" ${S.set.borg === 2 ? 'selected' : ''}>枪手</option></select></label>
       <label class="field"><span>性别</span><select id="setMorf"><option value="1" ${S.set.morf === 1 ? 'selected' : ''}>男性</option><option value="2" ${S.set.morf === 2 ? 'selected' : ''}>女性</option></select></label>

@@ -1,0 +1,43 @@
+.loadout-workspace { --loadout-line: #39464a; --loadout-surface: #151e24; --loadout-accent: #eecb94; }
+.loadout-banner { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 18px; padding: 10px 14px; border: 1px solid var(--loadout-line); border-left: 3px solid #cda570; border-radius: 9px; background: linear-gradient(105deg, #302820, #1a2830 74%); margin-bottom: 10px; }
+.loadout-banner h1 { font-size: 24px; margin: 0; letter-spacing: .06em; }
+.loadout-tabs { display: flex; gap: 4px; flex-wrap: wrap; margin-bottom: 8px; }
+.loadout-banner .loadout-tabs { margin: 0; }
+.loadout-tabs a { padding: 5px 9px; border: 1px solid var(--line-2); border-radius: 6px; color: var(--muted); font-size: 13px; }
+.loadout-tabs a:hover, .loadout-tabs a[aria-current] { color: var(--gold-2); background: #433525; border-color: #8e7352; }
+.loadout-columns { display: grid; grid-template-columns: minmax(250px, 30fr) minmax(0, 70fr); gap: 10px; align-items: start; }
+.loadout-panel { min-width: 0; border: 1px solid var(--loadout-line); border-radius: 9px; background: var(--loadout-surface); overflow: hidden; }
+.loadout-panel h2 { margin: 0; padding: 9px 11px; border-bottom: 1px solid var(--loadout-line); background: #222e35; font-size: 14px; }
+.loadout-panel h2 span { color: var(--muted); font-size: 12px; font-weight: 400; }
+.loadout-form { display: grid; gap: 10px; padding: 10px; }
+.loadout-form label { display: grid; gap: 4px; min-width: 0; color: var(--muted); font-size: 12px; }
+.loadout-form :is(input, select) { width: 100%; min-width: 0; min-height: 34px; padding: 4px 7px; border: 1px solid var(--line-2); border-radius: 5px; color: var(--text); background: var(--bg); color-scheme: dark; }
+.loadout-form-pair, .loadout-charm-skill, .loadout-picker { display: grid; gap: 6px; }
+.loadout-form-pair { grid-template-columns: 1fr 1fr; }
+.loadout-charm-skill { grid-template-columns: minmax(0, 1fr) minmax(58px, 24%); }
+.loadout-picker { grid-template-columns: minmax(0, 1fr) auto; }
+.loadout-inline-link { color: var(--loadout-accent); font-size: 12px; }
+.loadout-targets { min-width: 0; margin: 0; padding: 8px; border: 1px solid var(--loadout-line); border-radius: 6px; display: grid; gap: 6px; }
+.loadout-targets legend { color: var(--loadout-accent); padding: 0 4px; font-size: 12px; }
+.loadout-target-list, .loadout-actions, .loadout-active, .loadout-solution-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 5px; }
+.loadout-target { cursor: pointer; color: #b7e8d9; background: #263e39; border: 1px solid #47675f; padding: 3px 6px; border-radius: 5px; font-size: 12px; }
+.loadout-note, .loadout-search-note { color: var(--muted); font-size: 12px; }
+.loadout-note { margin: 0; }
+.loadout-note:empty { display: none; }
+.loadout-search-note { margin: 0; padding: 8px 10px 0; }
+.loadout-results { display: grid; gap: 6px; padding: 8px; }
+.loadout-charm-row { display: flex; justify-content: space-between; align-items: center; gap: 6px; padding: 7px; border: 1px solid var(--loadout-line); border-radius: 5px; }
+.loadout-charm-row small { display: block; color: var(--muted); margin-top: 3px; }
+.loadout-solution { border: 1px solid var(--loadout-line); border-radius: 6px; overflow: hidden; }
+.loadout-solution summary { cursor: pointer; padding: 6px 8px; background: #253030; color: var(--loadout-accent); overflow-wrap: anywhere; }
+.loadout-solution summary span { color: var(--muted); margin-left: 8px; font-size: 11px; }
+.loadout-solution-body { display: grid; gap: 7px; padding: 7px; }
+.loadout-solution-body .grid :is(td,th) { padding: 4px 6px; font-size: 12px; text-align: left; }
+.loadout-solution-body .grid small { display: block; color: var(--muted); }
+.loadout-solution-body .grid a { color: #b7e8d9; }
+.loadout-solution-body .grid a:hover { text-decoration: underline; }
+.loadout-solution-actions { padding: 5px 7px; border-top: 1px solid var(--loadout-line); }
+.loadout-name-dialog { width: min(400px, calc(100% - 24px)); padding: 0; border: 1px solid var(--gold-dim); border-radius: 8px; color: var(--text); background: var(--panel); }
+.loadout-name-dialog h2 { margin: 0; font-size: 16px; color: var(--gold-2); }
+.loadout-name-dialog::backdrop { background: #070a10ad; }
+@media (max-width: 720px) { .loadout-columns { grid-template-columns: minmax(0, 1fr); } }

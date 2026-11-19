@@ -4,6 +4,7 @@ const http = require('node:http');
 const fs = require('node:fs');
 const path = require('node:path');
 const { DatabaseSync } = require('node:sqlite');
+const { Worker } = require('node:worker_threads');
 
 const ROOT = path.join(__dirname, '..');
 const DB_PATH = process.env.MHXX_DB || path.join(ROOT, 'data', 'mhxx_dex.sqlite');
@@ -1547,7 +1548,20 @@ function setSkills(req, res) {
        GROUP BY t.SklTree_ID ORDER BY t.SklTree_ID`
     )
     .all();
-  json(res, 200, { rows });
+  const levels = db.prepare(`SELECT s.Skl_ID id, s.SklTree_ID treeId, s.Pt pt, n.${L('Skl_Name', lang)} name
+    FROM DB_Skl s JOIN ID_Skl_Name n USING (Skl_ID) WHERE s.Pt > 0 AND s.SklTree_ID > 1 ORDER BY s.SklTree_ID,s.Pt`).all();
+  json(res, 200, { rows, levels });
+}
+
+async function runLoadoutSearch(res, body) {
+  const worker = new Worker(path.join(__dirname, 'loadout-search.js'), { workerData: { dbPath: DB_PATH, body, lang: clampLang(body?.lang) } });
+  res.once('close', () => worker.terminate());
+  const result = await new Promise((resolve, reject) => {
+    worker.once('message', resolve);
+    worker.once('error', reject);
+    worker.once('exit', () => resolve(null));
+  });
+  if (!res.destroyed) json(res, result ? (result.error ? 400 : 200) : 500, result || { error: '搜索提前结束，请重试。' });
 }
 
 function computeSet(res, body) {
@@ -1745,6 +1759,7 @@ const server = http.createServer(async (req, res) => {
       const body = await readBody(req);
       return computeSet(res, body);
     }
+    if (url.pathname === '/api/set/search' && req.method === 'POST') return await runLoadoutSearch(res, await readBody(req));
 
     if (url.pathname.startsWith('/api/')) {
       for (const [re, handler] of routes) {
