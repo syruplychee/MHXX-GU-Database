@@ -375,7 +375,7 @@ function forgeStats(detail) {
   <dl class="forge-stat-sheet">
     ${row('稀有度', `<b style="color:${RARITY[w.Rare] || RARITY[0]}">RARE ${w.Rare}</b>`)}
     ${row('攻击力', `<strong>${num(w.Atk)}</strong>`, 'forge-attack')}
-    ${row('会心率', `${w.Affinity || 0}%`)}
+    ${row('会心率', affinityPercent(w.Affinity))}
     ${row('防御加成', `${w.Def > 0 ? '+' : ''}${num(w.Def)}`)}
     ${row('属性', elements || '无')}
     ${row('孔位', `<span class="forge-slots" aria-label="${w.Slot || 0} 个孔位">${'●'.repeat(w.Slot || 0)}${'○'.repeat(3 - (w.Slot || 0))}</span>`)}

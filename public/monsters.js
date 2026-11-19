@@ -5,6 +5,9 @@ const MONSTER_RANKS = [['1', '下位'], ['2', '上位'], ['3', 'G 位'], ['speci
 const MONSTER_BODY_TABS = [['parts', '肉质'], ['status', '状态与陷阱'], ['quests', '相关任务']];
 const MONSTER_REFERENCE = 'https://github.com/jestar719/mhgu/blob/fb8878ea2e0ff4c2848d7d9599ceb2f1279700ff/app/src/main/assets/mhxx/data/';
 const MONSTER_REFERENCE_PAGES = { 124: 2879, 127: 2993, 128: 2994, 129: 2995 };
+// Matched the desktop icons and numeric records against the MHXX/MHGU monster tables.
+const MONSTER_AILMENTS = { 6: '中毒', 7: '麻痹', 8: '睡眠', 9: '爆破', 10: '眩晕', 11: '减气', 12: '跳跃', 13: '乘骑' };
+const MONSTER_TRAPS = { 1: '闪光弹', 2: '麻痹陷阱', 3: '落穴陷阱', 4: '音爆弹', 5: '陷阱肉' };
 
 function monsterHref(id, kind = '', q = '', form = '') {
   const query = new URLSearchParams();
@@ -222,10 +225,10 @@ function monsterParts(d, form) {
 function monsterStatus(d) {
   const info = [];
   if (d.ailments.length) info.push(monsterSection('状态异常耐性', simpleTable(['状态', '初始', '增加', '上限', '持续', '伤害'], d.ailments.map((r) => `<tr>
-    <td><div class="cell-name">${ic('Stat_' + String(r.stat).padStart(2, '0'))}<span>状态 ${r.stat}</span></div></td>
+    <td><div class="cell-name">${r.stat === 12 ? '' : ic('Stat_' + String(r.stat).padStart(2, '0'))}<span>${MONSTER_AILMENTS[r.stat]}</span></div></td>
     <td>${num(r.initial)}</td><td>${num(r.inc)}</td><td>${num(r.max)}</td><td>${r.duration < 0 ? '—' : num(r.duration)}</td><td>${r.damage < 0 ? '—' : num(r.damage)}</td></tr>`))));
   if (d.traps.length) info.push(monsterSection('陷阱效果', simpleTable(['陷阱', '有效', '通常', '愤怒', '疲劳'], d.traps.map((r) => `<tr>
-    <td><div class="cell-name">${ic('Trap_' + r.trap)}<span>陷阱 ${r.trap}</span></div></td><td>${r.effect > 0 ? '有效' : '无效'}</td>
+    <td><div class="cell-name">${ic('Trap_' + r.trap)}<span>${MONSTER_TRAPS[r.trap]}</span></div></td><td>${r.effect > 0 ? '有效' : '无效'}</td>
     ${[r.duration, r.enraged, r.fatigued].map((value) => `<td>${value > 0 ? value + 's' : '—'}</td>`).join('')}</tr>`))));
   return info.join('') || '<p class="monster-empty">没有已记录的状态或陷阱数据。</p>';
 }

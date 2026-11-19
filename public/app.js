@@ -9,6 +9,7 @@ const view = $('#view');
 const esc = (s) =>
   String(s === null || s === undefined ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const num = (n) => (n === null || n === undefined || n === '' ? '—' : Number(n).toLocaleString('en-US'));
+const affinityPercent = (value) => `${Math.round((value ?? 0) * 100)}%`;
 const pct = (n) => {
   if (n === null || n === undefined) return '—';
   const v = Number(n);
@@ -754,7 +755,7 @@ async function weaponPage({ token }, id) {
           <a class="chip gold" href="${forgeHref({ type: w.Wpn_Type_ID, weapon: w.Wpn_ID })}">在派生图中定位 ↗</a></div>
         <div class="stat-grid">
           ${statBox('攻击力', num(w.Atk), 'gold')}
-          ${statBox('会心率', (w.Affinity ? w.Affinity + '%' : '0%'))}
+          ${statBox('会心率', affinityPercent(w.Affinity))}
           ${statBox('防御', num(w.Def))}
           ${statBox('稀有度', 'R' + w.Rare)}
           ${statBox('生产费用', num(w.ProPx) + 'z')}

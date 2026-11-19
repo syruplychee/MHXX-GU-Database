@@ -159,7 +159,7 @@ function palicoGearDetail(detail, weapon) {
   const stat = (label, value) => `<div><dt>${label}</dt><dd>${value}</dd></div>`;
   const sharp = ['—', '红', '橙', '黄', '绿', '蓝', '白', '紫'][a.Sharp_ID];
   const stats = [['防御', a.Def], ['价格', `${num(a.Price)} z`], ...(weapon ? [['锋利度', sharp], ['类型', esc(a.typeName)]] : [])];
-  const weaponTable = () => simpleTable(['攻击', '威力', '会心率', '属性'], [['近战', a.AtkD, a.AtkD_Affinity, a.AtkD_SpAtkPt], ['远程', a.AtkI, a.AtkI_Affinity, a.AtkI_SpAtkPt]].map(([label, attack, affinity, pt]) => `<tr><td>${label}</td><td>${num(attack)}</td><td>${Math.round(affinity * 100)}%</td><td>${elementChip(a.element, pt) || '—'}</td></tr>`));
+  const weaponTable = () => simpleTable(['攻击', '威力', '会心率', '属性'], [['近战', a.AtkD, a.AtkD_Affinity, a.AtkD_SpAtkPt], ['远程', a.AtkI, a.AtkI_Affinity, a.AtkI_SpAtkPt]].map(([label, attack, affinity, pt]) => `<tr><td>${label}</td><td>${num(attack)}</td><td>${affinityPercent(affinity)}</td><td>${elementChip(a.element, pt) || '—'}</td></tr>`));
   const resist = resGrid({ fir: a.Res_Fire, wtr: a.Res_Water, thd: a.Res_Thunder, ice: a.Res_Ice, drg: a.Res_Dragon });
   return `<header class="armor-hero"><div class="armor-art">${ic(a.ImgFile, 'armor-art-img')}</div><div><h3>${esc(a.name)}</h3><div class="armor-piece-tags">${rarity(a.Rare)} ${palicoPart(a.Part)}</div><dl class="armor-stats">${stats.map(([label, value]) => stat(label, value)).join('')}</dl></div></header>
     <section class="armor-block"><h3>${weapon ? '攻击与属性' : '属性耐性'}</h3><div class="armor-block-body">${weapon ? weaponTable() : resist}</div></section>
