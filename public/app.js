@@ -10,6 +10,7 @@ const esc = (s) =>
   String(s === null || s === undefined ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const num = (n) => (n === null || n === undefined || n === '' ? '—' : Number(n).toLocaleString('en-US'));
 const affinityPercent = (value) => `${Math.round((value ?? 0) * 100)}%`;
+const weaponSlotMarks = (slots) => '○'.repeat(slots) + '-'.repeat(3 - slots);
 const pct = (n) => {
   if (n === null || n === undefined) return '—';
   const v = Number(n);
@@ -750,7 +751,7 @@ async function weaponPage({ token }, id) {
       <div class="detail-info">
         <div class="eyebrow">#${w.Wpn_ID} · ${esc(weaponTypeName(w.Wpn_Type_ID))}</div>
         <h1>${esc(w.name)}</h1>
-        <div class="tags">${rarity(w.Rare)} ${tag(weaponTypeName(w.Wpn_Type_ID))} ${w.Slot ? chip('孔位 ' + '◉'.repeat(w.Slot)) : ''}
+        <div class="tags">${rarity(w.Rare)} ${tag(weaponTypeName(w.Wpn_Type_ID))} <span class="chip" aria-label="${w.Slot} 个孔位">孔位 ${weaponSlotMarks(w.Slot)}</span>
           ${elementChip(w.el1name, w.SpAtk1_Pt)}${elementChip(w.el2name, w.SpAtk2_Pt)}
           <a class="chip gold" href="${forgeHref({ type: w.Wpn_Type_ID, weapon: w.Wpn_ID })}">在派生图中定位 ↗</a></div>
         <div class="stat-grid">
