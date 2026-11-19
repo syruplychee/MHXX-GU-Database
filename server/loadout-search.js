@@ -4,14 +4,16 @@ const { parentPort, workerData } = require('node:worker_threads');
 const { DatabaseSync } = require('node:sqlite');
 
 const TORSO_UP = 1;
-const RESULT_LIMIT = 24;
+const RESULT_LIMIT = 100;
 const SEARCH_MS = 5000;
 const integer = (n, low, high) => Number.isInteger(n) && n >= low && n <= high;
 
 function searchLoadouts(db, input, lang) {
-  const { borg, morf, weaponSlots, targets, charms, charmId = null } = input || {};
+  const { borg, morf, weaponSlots, targets, charms, charmId = null, excludedArmor = [] } = input || {};
   if (![1, 2].includes(borg) || ![1, 2].includes(morf) || !integer(weaponSlots, 0, 3) ||
       !Array.isArray(targets) || !targets.length || !Array.isArray(charms)) return { error: '请选择职业、性别和至少一项目标技能。' };
+  if (!Array.isArray(excludedArmor) || excludedArmor.some((id) => !Number.isSafeInteger(id) || id <= 0)) return { error: '排除清单必须由有效的防具编号组成。' };
+  const excluded = new Set(excludedArmor);
 
   const skillRows = db.prepare(`SELECT s.Skl_ID id, s.SklTree_ID treeId, s.Pt pt, n.Skl_Name_${lang} name
     FROM DB_Skl s JOIN ID_Skl_Name n USING (Skl_ID) ORDER BY s.Pt`).all();
@@ -34,15 +36,15 @@ function searchLoadouts(db, input, lang) {
     for (const { treeId, pt } of points) if (index.has(treeId)) vector[index.get(treeId)] += pt;
     return vector;
   };
-  const owned = [{ id: '', name: '无护石', slots: 0, skills: [] }];
+  const owned = [{ id: '', slots: 0, skills: [] }];
   for (const charm of charms) {
-    if (!charm || typeof charm.id !== 'string' || !charm.id || typeof charm.name !== 'string' || !charm.name.trim() ||
+    if (!charm || typeof charm.id !== 'string' || !charm.id ||
         !integer(charm.slots, 0, 3) || !Array.isArray(charm.skills) || charm.skills.length > 2 ||
         charm.skills.some((s) => !s || s.treeId === TORSO_UP || !levelsByTree.has(s.treeId) || !integer(s.pt, -99, 99))) {
-      return { error: '护石需要名称、0–3 个孔位，以及最多两项有效的技能点。' };
+      return { error: '护石需要 0–3 个孔位，以及最多两项有效的技能点。' };
     }
     if (new Set(charm.skills.map((s) => s.treeId)).size !== charm.skills.length) return { error: '同一枚护石的两个技能必须不同。' };
-    owned.push({ id: charm.id, name: charm.name, slots: charm.slots, skills: charm.skills });
+    owned.push({ id: charm.id, slots: charm.slots, skills: charm.skills });
   }
   const allowedCharms = charmId === null ? owned : owned.filter((charm) => charm.id === charmId);
   if (!allowedCharms.length) return { error: '指定的护石不在护石列表里。' };
@@ -50,7 +52,8 @@ function searchLoadouts(db, input, lang) {
   const treeNames = new Map(db.prepare(`SELECT SklTree_ID id, SklTree_Name_${lang} name FROM ID_SklTree_Name`).all().map((r) => [r.id, r.name]));
   const pieces = db.prepare(`SELECT a.Amr_ID id, n.Amr_Name_${lang} name, a.Part part, a.Slot slots, a.Def def, a.MaxDef maxDef
     FROM DB_Amr a JOIN ID_Amr_Name n USING (Amr_ID)
-    WHERE a.BorG IN (0, ?) AND a.MorF IN (0, ?) ORDER BY a.Amr_ID`).all(borg, morf);
+    WHERE a.BorG IN (0, ?) AND a.MorF IN (0, ?) ORDER BY a.Amr_ID`).all(borg, morf)
+    .filter((piece) => !excluded.has(piece.id));
   const armorPoints = Map.groupBy(db.prepare('SELECT Amr_ID id, SklTree_ID treeId, Pt pt FROM DB_SklTreetoAmr').all(), (s) => s.id);
   for (const piece of pieces) piece.skills = armorPoints.get(piece.id) || [];
   const jewels = db.prepare(`SELECT j.Jew_ID id, n.Itm_Name_${lang} name, j.Slot slots, j.SklTree1_ID t1, j.SklTree1_Pt p1,

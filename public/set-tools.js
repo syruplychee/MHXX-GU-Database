@@ -1,6 +1,6 @@
 'use strict';
 
-const LOADOUT_TABS = [['', '自动配装'], ['charms', '护石库'], ['favorites', '收藏'], ['manual', '手动配装']];
+const LOADOUT_TABS = [['', '自动配装'], ['charms', '护石库'], ['excluded', '排除装备'], ['favorites', '收藏'], ['manual', '手动配装']];
 const loadoutControls = { borg: 1, morf: 1, weaponSlots: 0, charmId: 'any', targets: [] };
 let lastLoadoutSearch = null;
 
@@ -25,10 +25,20 @@ function loadoutSlots(selected) {
   return loadoutOptions([0, 1, 2, 3].map((id) => ({ id })), (item) => `${item.id} 孔`, selected);
 }
 
+function loadoutCharmLabel(charm, nameOf = (skill) => skill.name) {
+  if (!charm.id) return '无护石';
+  return [...charm.skills.map((s) => `${nameOf(s)} ${signedSkillPoints(s.pt)}`), `${charm.slots} 孔`].join(' · ');
+}
+
 async function setWorkspacePage(ctx) {
   const page = ctx.parts[1] || '';
   if (page === 'manual') return setPage(ctx);
-  view.innerHTML = `<div class="loadout-workspace"><header class="loadout-banner"><h1>配装器</h1>${loadoutTabs(page)}</header><div id="loadoutPage"><p class="loading">正在读取技能资料…</p></div></div>`;
+  view.innerHTML = `<div class="loadout-workspace"><header class="loadout-banner"><h1>配装器</h1>${loadoutTabs(page)}</header><div id="loadoutPage"><p class="loading">正在读取${page === 'excluded' ? '防具' : '技能'}资料…</p></div></div>`;
+  if (page === 'excluded') {
+    const catalog = await api('/armor/sets');
+    if (ctx.token === routeToken) loadoutExclusionsPage($('#loadoutPage'), catalog.rows.flatMap((set) => set.pieces));
+    return;
+  }
   const catalog = await api('/set/skills');
   if (ctx.token !== routeToken) return;
   const charms = loadoutCollection('owned-charms');
@@ -45,7 +55,7 @@ function loadoutCharmPage(host, charms, skills, treeNames) {
   let editing = null;
   const row = (i) => `<div class="loadout-charm-skill"><label>技能 ${i}<select name="skill${i}"><option value="">无</option>${loadoutOptions(skills, (s) => s.name)}</select></label><label>点数<input name="points${i}" type="number" min="-99" max="99" step="1" value="0"></label></div>`;
   host.innerHTML = `<div class="loadout-columns"><section class="loadout-panel loadout-config"><h2 id="loadoutCharmHeading">录入护石</h2>
-    <form id="loadoutCharmForm" class="loadout-form"><label>护石名称<input name="name" maxlength="80" required placeholder="例如：痛击 6 · 3 孔"></label>
+    <form id="loadoutCharmForm" class="loadout-form">
     <label>护石孔位<select name="slots">${loadoutSlots(0)}</select></label>${row(1)}${row(2)}
     <p class="loadout-note" id="loadoutCharmMessage" role="alert"></p><div class="loadout-actions"><button class="btn primary" type="submit">保存护石</button><button class="btn ghost" id="loadoutCharmCancel" type="button" hidden>取消编辑</button></div></form></section>
     <section class="loadout-panel"><h2>已有护石 <span id="loadoutCharmCount"></span></h2><div class="loadout-results" id="loadoutCharmRows"></div></section></div>`;
@@ -53,10 +63,9 @@ function loadoutCharmPage(host, charms, skills, treeNames) {
   const rows = $('#loadoutCharmRows');
   const cancel = $('#loadoutCharmCancel');
   const note = $('#loadoutCharmMessage');
-  const summary = (charm) => [`${charm.slots} 孔`, ...charm.skills.map((skill) => `${treeNames.get(skill.treeId)} ${signedSkillPoints(skill.pt)}`)].join(' · ');
   function render() {
     $('#loadoutCharmCount').textContent = `${charms.length} 枚`;
-    rows.innerHTML = charms.length ? charms.map((charm) => `<div class="loadout-charm-row"><div><b>${esc(charm.name)}</b><small>${esc(summary(charm))}</small></div>
+    rows.innerHTML = charms.length ? charms.map((charm) => `<div class="loadout-charm-row"><div><b>${esc(loadoutCharmLabel(charm, (skill) => treeNames.get(skill.treeId)))}</b></div>
       <div class="loadout-actions"><button class="btn sm" type="button" data-charm-edit="${esc(charm.id)}">编辑</button><button class="btn sm ghost" type="button" data-charm-delete="${esc(charm.id)}">删除</button></div></div>`).join('')
       : '<p class="loadout-note">还没有录入护石。</p>';
   }
@@ -67,24 +76,22 @@ function loadoutCharmPage(host, charms, skills, treeNames) {
     cancel.hidden = !editing;
     note.textContent = '';
     if (!charm) return;
-    form.elements.name.value = charm.name;
     form.elements.slots.value = charm.slots;
     for (const [i, skill] of charm.skills.entries()) {
       form.elements['skill' + (i + 1)].value = skill.treeId;
       form.elements['points' + (i + 1)].value = skill.pt;
     }
-    form.elements.name.focus();
+    form.elements.slots.focus();
   }
   form.addEventListener('submit', (event) => {
     event.preventDefault();
-    const name = form.elements.name.value.trim();
     const skills = [1, 2].map((i) => ({ treeId: Number(form.elements['skill' + i].value), pt: Number(form.elements['points' + i].value) })).filter((s) => s.treeId);
-    if (!name) { note.textContent = '请输入护石名称。'; return; }
     if (skills.length === 2 && skills[0].treeId === skills[1].treeId) { note.textContent = '两个技能必须不同。'; return; }
-    const charm = { id: editing || crypto.randomUUID(), name, slots: Number(form.elements.slots.value), skills };
+    const charm = { id: editing || crypto.randomUUID(), slots: Number(form.elements.slots.value), skills };
     if (editing) charms[charms.findIndex((item) => item.id === editing)] = charm;
     else charms.push(charm);
     saveLoadoutCollection('owned-charms', charms);
+    lastLoadoutSearch = null;
     edit(null); render();
   });
   rows.addEventListener('click', (event) => {
@@ -94,6 +101,7 @@ function loadoutCharmPage(host, charms, skills, treeNames) {
       const id = button.dataset.charmDelete;
       charms.splice(charms.findIndex((charm) => charm.id === id), 1);
       saveLoadoutCollection('owned-charms', charms);
+      lastLoadoutSearch = null;
       if (id === editing) edit(null);
       render();
     }
@@ -102,16 +110,75 @@ function loadoutCharmPage(host, charms, skills, treeNames) {
   render();
 }
 
+function loadoutExclusionsPage(host, pieces) {
+  const excluded = new Set(loadoutCollection('excluded-armor'));
+  const armorById = new Map(pieces.map((piece) => [piece.id, piece]));
+  const normalize = (name) => name.normalize('NFKC').toLowerCase();
+  const searchable = pieces.map((piece) => ({ piece, name: normalize(piece.name) }));
+  host.innerHTML = `<div class="loadout-columns loadout-exclusion-columns">
+    <section class="loadout-panel"><h2>选择防具 <span id="loadoutArmorCount"></span></h2>
+      <div class="loadout-form loadout-armor-filters"><label>防具名称<input type="search" id="loadoutArmorQuery" autocomplete="off"></label>
+        <label>部位<select id="loadoutArmorPart"><option value="">全部部位</option>${loadoutOptions(S.meta.armorParts, (part) => part.name)}</select></label></div>
+      <div class="loadout-results loadout-armor-list" id="loadoutArmorChoices"></div></section>
+    <section class="loadout-panel"><h2>已排除 <span id="loadoutExcludedCount"></span></h2>
+      <div class="loadout-results loadout-armor-list" id="loadoutExcludedRows"></div></section></div>`;
+  const query = $('#loadoutArmorQuery');
+  const part = $('#loadoutArmorPart');
+  const choices = $('#loadoutArmorChoices');
+  const selected = $('#loadoutExcludedRows');
+  const pieceLabel = (piece) => `${armorPartName(piece.part)} · ${borgName(piece.borg)} · ${morfName(piece.morf)}`;
+  function buttonState(button, isExcluded) {
+    button.textContent = isExcluded ? '恢复' : '排除';
+    button.classList.toggle('ghost', isExcluded);
+  }
+  const row = (piece) => `<div class="loadout-charm-row"><div><b>${esc(piece.name)}</b><small>${esc(pieceLabel(piece))}</small></div>
+    <button class="btn sm${excluded.has(piece.id) ? ' ghost' : ''}" type="button" data-armor-id="${piece.id}">${excluded.has(piece.id) ? '恢复' : '排除'}</button></div>`;
+  function renderChoices() {
+    const term = normalize(query.value.trim());
+    const filtered = searchable.filter((entry) => (!part.value || entry.piece.part === Number(part.value)) && entry.name.includes(term));
+    $('#loadoutArmorCount').textContent = `${num(filtered.length)} 件`;
+    choices.innerHTML = filtered.length ? filtered.map(({ piece }) => row(piece)).join('') : '<p class="loadout-note">没有找到符合条件的防具。</p>';
+    choices.scrollTop = 0;
+  }
+  function renderSelected() {
+    const rows = [...excluded].map((id) => armorById.get(id)).filter(Boolean);
+    $('#loadoutExcludedCount').textContent = `${rows.length} 件`;
+    selected.innerHTML = rows.length ? rows.map(row).join('') : '<p class="loadout-note">还没有排除任何防具。</p>';
+  }
+  host.addEventListener('click', (event) => {
+    const button = event.target.closest('button[data-armor-id]');
+    if (!button) return;
+    const id = Number(button.dataset.armorId);
+    if (!excluded.delete(id)) excluded.add(id);
+    saveLoadoutCollection('excluded-armor', [...excluded]);
+    lastLoadoutSearch = null;
+    const choice = $(`button[data-armor-id="${id}"]`, choices);
+    if (choice) buttonState(choice, excluded.has(id));
+    if (selected.contains(button)) {
+      const nextId = (button.parentElement.nextElementSibling || button.parentElement.previousElementSibling)?.querySelector('button').dataset.armorId;
+      renderSelected();
+      ($(`button[data-armor-id="${nextId}"]`, selected) || choice || query).focus();
+    } else {
+      renderSelected();
+    }
+  });
+  query.addEventListener('input', renderChoices);
+  part.addEventListener('change', renderChoices);
+  renderChoices();
+  renderSelected();
+}
+
 function loadoutSearchPage(host, levels, treeNames, charms, favorites, token) {
   const state = loadoutControls;
+  const excludedArmor = loadoutCollection('excluded-armor');
   if (!charms.some((charm) => charm.id === state.charmId) && state.charmId !== 'none') state.charmId = 'any';
   const available = levels.slice().sort((a, b) => a.name.localeCompare(b.name));
   const byId = new Map(levels.map((skill) => [skill.id, skill]));
   host.innerHTML = `<div class="loadout-columns"><section class="loadout-panel loadout-config"><h2>配装条件</h2>
     <form id="autoLoadoutForm" class="loadout-form">
       <div class="loadout-form-pair"><label>职业<select name="borg"><option value="1">剑士</option><option value="2">枪手</option></select></label><label>性别<select name="morf"><option value="1">男性</option><option value="2">女性</option></select></label></div>
-      <div class="loadout-form-pair"><label>武器孔位<select name="weaponSlots">${loadoutSlots(state.weaponSlots)}</select></label><label>护石<select name="charmId"><option value="any">全部已录入（含无护石）</option><option value="none">不使用</option>${loadoutOptions(charms, (c) => c.name, state.charmId)}</select></label></div>
-      <a class="loadout-inline-link" href="#/set/charms">管理已拥有的护石（${charms.length}）</a>
+      <div class="loadout-form-pair"><label>武器孔位<select name="weaponSlots">${loadoutSlots(state.weaponSlots)}</select></label><label>护石<select name="charmId"><option value="any">全部已录入（含无护石）</option><option value="none">不使用</option>${loadoutOptions(charms, (c) => loadoutCharmLabel(c, (s) => treeNames.get(s.treeId)), state.charmId)}</select></label></div>
+      <div class="loadout-actions"><a class="loadout-inline-link" href="#/set/charms">管理护石（${charms.length}）</a><a class="loadout-inline-link" href="#/set/excluded">排除装备（${excludedArmor.length}）</a></div>
       <fieldset class="loadout-targets"><legend>目标技能</legend><label>搜索技能<input type="search" id="loadoutSkillQuery" placeholder="例如：弱点特效" autocomplete="off"></label>
         <div class="loadout-picker"><select id="loadoutSkillChoice" aria-label="技能等级"></select><button type="button" id="loadoutAddSkill" class="btn sm">添加</button></div><div id="loadoutTargetRows" class="loadout-target-list"></div></fieldset>
       <div class="loadout-actions"><button class="btn primary" id="loadoutRun" type="submit">搜索配装</button><button class="btn ghost" id="loadoutStop" type="button" hidden>停止</button></div>
@@ -176,7 +243,7 @@ function loadoutSearchPage(host, levels, treeNames, charms, favorites, token) {
     status.textContent = '正在搜索满足目标技能的组合…'; rows.innerHTML = '';
     try {
       const response = await fetch('/api/set/search', { method: 'POST', signal: controller.signal,
-        headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...state, lang: S.lang, charms,
+        headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...state, lang: S.lang, charms, excludedArmor,
           charmId: state.charmId === 'any' ? null : state.charmId === 'none' ? '' : state.charmId }) });
       const result = await response.json();
       if (!response.ok) throw new Error(result.error || response.statusText);
@@ -258,7 +325,7 @@ function loadoutResultHTML(build, name, actions, open) {
       <div class="loadout-solution-body"><div class="loadout-active">${build.active.map((skill) => chip(`${skill.name} ${signedSkillPoints(skill.pt)}`, skill.negative ? 'red' : build.goals.some((target) => target.treeId === skill.treeId) ? 'gold' : '')).join('')}</div>
       ${simpleTable(['部位', '装备', '已用／孔', '装饰品'], [
         ...build.armor.map((gear) => position(armorPartName(gear.part), gear, `<a href="#/armor/${gear.id}">${esc(gear.name)}</a>`)),
-        position('护石', build.charm, `${esc(build.charm.name)}${build.charm.skills.length ? `<small>${build.charm.skills.map((s) => `${esc(s.name)} ${signedSkillPoints(s.pt)}`).join(' · ')}</small>` : ''}`),
+        position('护石', build.charm, esc(loadoutCharmLabel(build.charm))),
         ...(build.weapon.slots ? [position('武器', build.weapon, '任意符合孔位的武器')] : []),
       ])}${build.torso ? `<p class="loadout-note">身体系统加倍：胸甲和其中的装饰品按 ${build.torso + 1} 倍计点。</p>` : ''}
       </div></details><div class="loadout-solution-actions">${actions}</div></article>`;

@@ -28,6 +28,10 @@
 .loadout-results { display: grid; gap: 6px; padding: 8px; }
 .loadout-charm-row { display: flex; justify-content: space-between; align-items: center; gap: 6px; padding: 7px; border: 1px solid var(--loadout-line); border-radius: 5px; }
 .loadout-charm-row small { display: block; color: var(--muted); margin-top: 3px; }
+.loadout-exclusion-columns { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+.loadout-armor-filters { grid-template-columns: minmax(0, 1fr) minmax(90px, 26%); }
+.loadout-armor-list { max-height: 60vh; overflow-y: auto; align-content: start; }
+.loadout-armor-list button { flex-shrink: 0; }
 .loadout-solution { border: 1px solid var(--loadout-line); border-radius: 6px; overflow: hidden; }
 .loadout-solution summary { cursor: pointer; padding: 6px 8px; background: #253030; color: var(--loadout-accent); overflow-wrap: anywhere; }
 .loadout-solution summary span { color: var(--muted); margin-left: 8px; font-size: 11px; }
