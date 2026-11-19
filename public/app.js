@@ -155,7 +155,7 @@ async function route() {
       case 'skills': return parts[1] ? go((c) => skillPage(c, +parts[1])) : go(skillsPage);
       case 'jewels': return parts[1] ? go((c) => jewelPage(c, +parts[1])) : go(jewelsPage);
       case 'quests': return go(questBrowserPage);
-      case 'monsters': return parts[1] ? go((c) => monsterPage(c, +parts[1])) : go(monstersPage);
+      case 'monsters': return go(monsterBrowserPage);
       case 'combos': return go(combosPage);
       case 'horns': return go(hornsPage);
       case 'kinsects': return go(kinsectsPage);
@@ -537,20 +537,6 @@ function jewelsPage({ params, token }) {
   });
 }
 
-function monstersPage({ params, token }) {
-  return listPage({
-    params, token, eyebrow: 'Monsters', title: '怪物', sub: '弱点、状态耐性、陷阱与素材掉率',
-    filters: [filterSearch(params)],
-    fetch: (p) => api('/monsters', { q: p.q, page: p.page }),
-    href: (r) => `#/monsters/${r.id}`,
-    columns: [
-      { label: '怪物', render: (r) => `<div class="cell-name">${monIcon(r.id)}<span class="nm">${esc(r.name)}</span></div>` },
-      { label: '出现任务', cls: 'num', render: (r) => r.quests },
-      { label: '图鉴编号', cls: 'num dim', render: (r) => `<span class="mono">${String(r.id).padStart(3, '0')}</span>` },
-    ],
-  });
-}
-
 function combosPage({ params, token }) {
   return listPage({
     params, token, eyebrow: 'Combos', title: '调和', sub: '素材 A + B → 结果 · 成功率',
@@ -894,54 +880,6 @@ async function jewelPage({ token }, id) {
     </div>
     ${d.materials.length ? section('生产素材', simpleTable(['素材', '数量'], d.materials.map((m) => `<tr class="clickable" data-href="#/items/${m.id}">
       <td><div class="cell-name">${itemIcon(m.id)}<span class="nm">${esc(m.name)}</span></div></td><td class="num">${num(m.qty)}</td></tr>`)), d.materials.length) : ''}
-  `;
-}
-
-/* ============================================================ monster detail */
-
-async function monsterPage({ token }, id) {
-  view.innerHTML = `<div class="loading">加载中…</div>`;
-  const d = await api(`/monsters/${id}`);
-  if (token !== routeToken) return;
-  const m = d.data;
-  const cols = [['切断', 'cut'], ['打击', 'impact'], ['射击', 'shot'], ['火', 'fir'], ['水', 'wtr'], ['雷', 'thd'], ['冰', 'ice'], ['龙', 'drg'], ['眩晕', 'diz']];
-  const val = (v) => `<span class="${v >= 60 ? 'pos' : v <= 20 ? 'neg' : ''}">${v}</span>`;
-  const groups = {};
-  for (const row of d.drops) {
-    const key = (row.how || '其他') + ' · ' + (row.rank || '');
-    (groups[key] = groups[key] || []).push(row);
-  }
-  view.innerHTML = `
-    ${crumbs([['#/monsters', '怪物'], [null, m.name]])}
-    <div class="detail-hero">
-      <div class="detail-art"><div class="art-box">${monBig(m.id)}</div></div>
-      <div class="detail-info">
-        <div class="eyebrow">Monster #${String(m.id).padStart(3, '0')}</div>
-        <h1>${esc(m.name)}</h1>
-        <div class="tags">${chip(d.weak.length + ' 个部位')} ${chip(d.drops.length + ' 条素材')} ${chip(d.quests.length + ' 个任务')}</div>
-      </div>
-    </div>
-
-    ${d.weak.length ? section('肉质弱点', simpleTable(['部位', ...cols.map((c) => c[0])], d.weak.map((r) => `<tr>
-      <td>${esc(r.part || ('部位 ' + r.partId))}</td>${cols.map((c) => `<td class="num">${val(r[c[1]])}</td>`).join('')}</tr>`)), d.weak.length) : ''}
-
-    ${d.ailments.length ? section('状态异常耐性', simpleTable(['状态', '初始', '增加', '上限', '持续', '伤害'], d.ailments.map((r) => `<tr>
-      <td><div class="cell-name">${ic('Stat_' + String(r.stat).padStart(2, '0'))}<span class="dim">状态 ${r.stat}</span></div></td>
-      <td class="num">${num(r.initial)}</td><td class="num">${num(r.inc)}</td><td class="num">${num(r.max)}</td>
-      <td class="num">${r.duration < 0 ? '—' : num(r.duration)}</td><td class="num">${r.damage < 0 ? '—' : num(r.damage)}</td></tr>`)), d.ailments.length) : ''}
-
-    ${d.traps.length ? section('陷阱效果', simpleTable(['陷阱', '有效', '通常', '愤怒', '疲劳'], d.traps.map((r) => `<tr>
-      <td><div class="cell-name">${ic('Trap_' + r.trap)}<span>陷阱 ${r.trap}</span></div></td>
-      <td>${r.effect > 0 ? '<span class="chip gold">有效</span>' : '<span class="chip">无效</span>'}</td>
-      <td class="num">${r.duration > 0 ? r.duration + 's' : '—'}</td><td class="num">${r.enraged > 0 ? r.enraged + 's' : '—'}</td>
-      <td class="num">${r.fatigued > 0 ? r.fatigued + 's' : '—'}</td></tr>`)), d.traps.length) : ''}
-
-    ${Object.keys(groups).map((g) => section(`素材 · ${g}`, simpleTable(['道具', '数量', '概率'], groups[g].map((r) => `<tr class="clickable" data-href="#/items/${r.id}">
-      <td><div class="cell-name">${itemIcon(r.id)}<span class="nm">${esc(r.name)}</span></div></td>
-      <td class="num">${num(r.qty)}</td><td class="num">${pct(r.pct)}</td></tr>`)), groups[g].length)).join('')}
-
-    ${d.quests.length ? section('相关任务', simpleTable(['任务', '等级'], d.quests.map((r) => `<tr class="clickable" data-href="#/quests/${r.id}">
-      <td><span class="nm">${esc(r.name)}</span></td><td>${esc(r.lv || '—')}</td></tr>`)), d.quests.length) : ''}
   `;
 }
 

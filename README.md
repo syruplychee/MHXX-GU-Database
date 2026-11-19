@@ -30,7 +30,7 @@ node server/server.js        # 或双击 start.cmd
 | 防具 | 5,726 件，按 1,260 个系列分组；三栏筛选、可折叠长列表、整套技能点合计及单件素材和耐性 |
 | 技能 | 205 个技能树；等级阈值、说明；提供该技能的防具与装饰品 |
 | 装饰品 | 275 种珠子；孔位、价格、技能、素材 |
-| 怪物 | 130 只；肉质弱点（切断/打击/射击/五属性/眩晕）、状态耐性、陷阱效果、分等级素材掉率、相关任务 |
+| 怪物 | 93 只大型、36 只小型；分栏查看原版部位示意图、肉质、状态和陷阱、相关任务及分等级素材掉率 |
 | 任务 | 1,307 个；左侧搜索和组合筛选，右侧查看目标、报酬、怪物、前置、受注和解锁资料 |
 | 调和 / 笛旋律 / 猎虫 / 地图采集 / 勋章 / 斗技大会 / 猫猎人 | 原始数据表重建 |
 | 随从 | 随从武器、随从防具、随从队伍 |
@@ -95,7 +95,7 @@ webapp/
 | GET | `/api/skills?q&page`、`/api/skills/:id` | 技能树与等级 |
 | GET | `/api/jewels?q&slot&page`、`/api/jewels/:id` | 装饰品 |
 | GET | `/api/quests?q&group&lv&type&key&supplement&page`、`/api/quests/:id` | 任务、报酬和解锁资料 |
-| GET | `/api/monsters?q&page`、`/api/monsters/:id` | 怪物弱点/耐性/陷阱/掉率 |
+| GET | `/api/monsters?q&kind&page`、`/api/monsters/:id` | 分类、原版部位图、肉质、耐性、陷阱和各等级掉率 |
 | GET | `/api/combos`、`/api/horns`、`/api/kinsects`、`/api/palico/*`、`/api/arena`、`/api/locations`、`/api/awards`、`/api/hfh` | 其余数据表 |
 | GET | `/api/search?q` | 六类聚合搜索 |
 | GET | `/api/set/armor?part&borg&morf`、`/api/set/jewels`、`/api/set/skills` | 配装器选项 |
@@ -150,6 +150,7 @@ function build() {
 | --- | --- |
 | `Itm_0001` | 道具图标 |
 | `Mon_S_001` / `Mon_B_001` | 怪物小/大图标 |
+| `MonPart_037` 等 | 桌面版原始分辨率的编号肉质示意图，共 89 张 |
 | `Wpn_0101` | 武器类型图标（类型 2 位 + 序号 2 位） |
 | `AmrImg_0001_M/F` | 防具套装立绘（男/女，已压缩为 ≤200px JPEG） |
 | `two130`、`swo001`、`bow001` … | 武器立绘（来自 `DB_Wpn.ImgFile`） |

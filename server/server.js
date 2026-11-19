@@ -157,7 +157,7 @@ function meta() {
       items: one('SELECT COUNT(*) n FROM DB_Itm WHERE Itm_ID > 0'),
       weapons: one('SELECT COUNT(*) n FROM DB_Wpn WHERE Wpn_ID > 0'),
       armor: one('SELECT COUNT(*) n FROM DB_Amr WHERE Amr_ID > 0'),
-      monsters: one('SELECT COUNT(*) n FROM ID_Mon_Name WHERE Mon_ID > 0'),
+      monsters: one('SELECT COUNT(*) n FROM ID_Mon_Name WHERE Mon_ID BETWEEN 1 AND 129'),
       quests: one('SELECT COUNT(*) n FROM DB_Qst'),
       skills: one('SELECT COUNT(DISTINCT SklTree_ID) n FROM DB_Skl'),
       jewels: one('SELECT COUNT(*) n FROM DB_Jew'),
@@ -944,26 +944,34 @@ function questDetail(req, res, id) {
 
 // ---------------------------------------------------------------- monsters
 
+// The original roster ends at 129. Entry 130 is the unstable-quest marker.
+const monsterType = (id) => id <= 36 ? 'small' : id <= 129 ? 'large' : 'marker';
+const monsterQuestCondition = (ref) => Array.from({ length: 8 }, (_, i) => `q.Mon${i + 1}_ID = ${ref}`).join(' OR ');
+
 function listMonsters(req, res) {
   const url = new URL(req.url, 'http://x');
   const lang = clampLang(url.searchParams.get('lang'));
   const q = (url.searchParams.get('q') || '').trim();
   const nc = L('Mon_Name', lang);
-  const where = ['m.Mon_ID > 0'];
+  const where = ['m.Mon_ID BETWEEN 1 AND 129'];
   const params = [];
   if (q) {
     where.push(`m.${nc} LIKE ? ESCAPE '\\'`);
     params.push(`%${escapeLike(q)}%`);
   }
+  const kind = url.searchParams.get('kind');
+  if (kind === 'small') where.push('m.Mon_ID <= 36');
+  if (kind === 'large') where.push('m.Mon_ID >= 37');
   const w = where.join(' AND ');
   paged(req, res, {
     countSql: `SELECT COUNT(*) n FROM ID_Mon_Name m WHERE ${w}`,
     countParams: params,
     listSql: `SELECT m.Mon_ID id, m.${nc} name,
                      (SELECT COUNT(DISTINCT q.Qst_ID) FROM DB_Qst q
-                       WHERE q.Mon1_ID = m.Mon_ID OR q.Mon2_ID = m.Mon_ID OR q.Mon3_ID = m.Mon_ID OR q.Mon4_ID = m.Mon_ID) quests
+                       WHERE ${monsterQuestCondition('m.Mon_ID')}) quests
               FROM ID_Mon_Name m WHERE ${w} ORDER BY m.Mon_ID LIMIT ? OFFSET ?`,
     listParams: params,
+    map: (row) => ({ ...row, kind: monsterType(row.id) }),
   });
 }
 
@@ -972,11 +980,16 @@ function monsterDetail(req, res, id) {
   const base = db.prepare(`SELECT Mon_ID id, ${L('Mon_Name', lang)} name FROM ID_Mon_Name WHERE Mon_ID = ?`).get(id);
   if (!base) return json(res, 404, { error: 'not found' });
 
+  const kind = monsterType(id);
+  const partArt = `MonPart_${String(id).padStart(3, '0')}`;
+  const diagram = kind === 'large' && ['.png', '.jpg'].some((ext) => fs.existsSync(path.join(PUBLIC_DIR, 'icons', partArt + ext))) ? partArt : null;
+
   const weak = db
     .prepare(
-      `SELECT w.MonPart_ID partId, p.${L('Mon_Part', lang)} part, w.MonPart_Num num,
+      `SELECT w.MonPart_ID partId, p.${L('Mon_Part', lang)} part, c.${L('Mon_PartCond', lang)} condition, w.MonPart_Num num,
               w.Cut cut, w.Impact impact, w.Shot shot, w.Fir fir, w.Wtr wtr, w.Ice ice, w.Thd thd, w.Drg drg, w.Diz diz
        FROM DB_Mon_Weak w LEFT JOIN ID_Mon_Part p ON p.Mon_Part_ID = w.MonPart_ID
+       LEFT JOIN ID_Mon_PartCond c ON c.Mon_Part_ID = w.MonPart_ID
        WHERE w.Mon_ID = ? ORDER BY w.MonPart_ID`
     )
     .all(id);
@@ -997,13 +1010,13 @@ function monsterDetail(req, res, id) {
 
   const drops = db
     .prepare(
-      `SELECT t.${L('Mon_GetItmType', lang)} how, r.${L('Rank', lang)} rank, x.Itm_ID id,
+      `SELECT t.${L('Mon_GetItmType', lang)} how, r.${L('Rank', lang)} rank, x.Rank_ID rankId, x.Itm_ID id,
               n.${L('Itm_Name', lang)} name, x.Qty qty, x.Pct pct
        FROM DB_ItmtoMon x
        JOIN ID_Itm_Name n ON n.Itm_ID = x.Itm_ID
        LEFT JOIN ID_Mon_GetItmType t ON t.Mon_GetItmType_ID = x.Mon_GetItmType_ID
        LEFT JOIN ID_Rank r ON r.Rank_ID = x.Rank_ID
-       WHERE x.Mon_ID = ? ORDER BY x.Mon_GetItmType_ID, x.Rank_ID, x.ID LIMIT 400`
+       WHERE x.Mon_ID = ? ORDER BY x.Mon_GetItmType_ID, x.Rank_ID, x.ID`
     )
     .all(id);
 
@@ -1012,12 +1025,12 @@ function monsterDetail(req, res, id) {
       `SELECT q.Qst_ID id, n.${L('Qst_Name', lang)} name, lv.${L('Qst_Lv', lang)} lv
        FROM DB_Qst q JOIN ID_Qst_Name n ON n.Qst_ID = q.Qst_ID
        LEFT JOIN ID_Qst_Lv lv ON lv.Qst_Lv_ID = q.Qst_Lv_ID
-       WHERE q.Mon1_ID = ? OR q.Mon2_ID = ? OR q.Mon3_ID = ? OR q.Mon4_ID = ? OR q.Mon5_ID = ? OR q.Mon6_ID = ?
-       ORDER BY q.Qst_ID LIMIT 120`
+       WHERE ${monsterQuestCondition('?1')}
+       ORDER BY q.Qst_ID`
     )
-    .all(id, id, id, id, id, id);
+    .all(id);
 
-  json(res, 200, { data: base, weak, ailments, traps, drops, quests });
+  json(res, 200, { data: { ...base, kind, diagram }, weak, ailments, traps, drops, quests });
 }
 
 // ---------------------------------------------------------------- combos
