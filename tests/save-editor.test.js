@@ -5,6 +5,7 @@ const { readFileSync } = require('node:fs');
 const path = require('node:path');
 const test = require('node:test');
 const { openSave, convertSave } = require('../public/save-core.js');
+const catalog = require('../public/save-catalog.json');
 
 const fixtures = {
   'switch-gu': { size: 5159100, header: 36, bases: [0x18CC78, 0x2AC53C, 0x3CBE00], width: 104, b: 0xB281 },
@@ -176,6 +177,97 @@ test('报告 GU 已知不兼容装备，并保留非穿戴内容供用户核对'
   assert.deepEqual(compatibility.equipped, ['槽 1 · 猎人 · 太刀 ID 100']);
   assert.equal(compatibility.storedGear, 1);
   assert.equal(compatibility.storedItems, 1);
+});
+
+test('道具使用随页面发布的存档 ID 表', () => {
+  assert.deepEqual(catalog.items[1], ['调和书1入门篇', false]);
+  assert.deepEqual(catalog.items[9], ['回复药', false]);
+  assert.equal(Object.keys(catalog.items).length, 2991);
+});
+
+test('猎人与艾露猫装备箱写回，穿戴中的记录保留引用与快照', () => {
+  const file = fixture('switch-gu', [0], 0);
+  const base = fixtures['switch-gu'].header + fixtures['switch-gu'].bases[0];
+  const save = openSave(file);
+  assert(save.setEquipment(0, 'hunter', 30, {
+    type: 1, id: 2, appearance: 1, jewels: [2638, 2639],
+  }, catalog));
+  assert.equal(save.equipment(0, 'hunter', 30).appearance, 1);
+  assert.deepEqual(save.equipment(0, 'hunter', 30).jewels, [2638, 2639, 0]);
+  assert.throws(() => save.setEquipment(0, 'hunter', 30, {
+    type: 1, id: 2, jewels: [2639, 2639],
+  }, catalog), /需要 4 孔/);
+  assert(save.setEquipment(0, 'palico', 5, { type: 23, id: 2, appearance: 1 }, catalog));
+  assert.equal(save.equipment(0, 'palico', 5).appearance, 1);
+
+  const worn = Buffer.from(save.export());
+  worn.writeUInt16LE(30, base + 0x23B39 + 2);
+  const equipped = openSave(worn);
+  assert.equal(equipped.playerStatus(0).equipment[1].index, 30);
+  assert.throws(() => equipped.setEquipment(0, 'hunter', 30, { type: 0, id: 0 }, catalog), /预设引用/);
+  assert(equipped.setEquipment(0, 'hunter', 30, { type: 1, id: 2, appearance: 3, jewels: [2638] }, catalog));
+  const out = Buffer.from(equipped.export());
+  assert.equal(out.readUInt16LE(base + 0x110 + 44 + 4), 3);
+  assert.equal(out.readUInt16LE(base + 0x23B39 + 2), 30);
+});
+
+test('护石校验技能点和孔数并写入品级原料，失败时保留原记录', () => {
+  const file = fixture('3ds-xx', [1], 0);
+  const save = openSave(file);
+  const charm = { type: 6, id: 1, points: [5, 0], skills: [1, 0], slots: 0, jewels: [] };
+  assert(save.setEquipment(1, 'hunter', 50, charm, catalog));
+  assert.equal(save.equipment(1, 'hunter', 50).points[0], 5);
+  const out = Buffer.from(save.export());
+  const base = fixtures['3ds-xx'].bases[1];
+  assert.equal(out.readUInt16LE(base + 0x62EE + 36 * 50 + 18), 353);
+  assert.throws(() => save.setEquipment(1, 'hunter', 50, { ...charm, points: [6, 0] }, catalog), /技能点数/);
+  assert.throws(() => save.setEquipment(1, 'hunter', 50, { ...charm, slots: 3 }, catalog), /孔数/);
+  assert(Buffer.from(save.export()).equals(out));
+});
+
+test('艾露猫编辑可回读，保持记录边界、指派和颜色第四字节', () => {
+  const file = fixture('switch-xx', [0], 0);
+  const base = fixtures['switch-xx'].header + fixtures['switch-xx'].bases[0];
+  const at = base + 0x23BB6 + 324 * 4;
+  file.write('测试猫', at);
+  file[at + 0x24] = 9;
+  file[at + 0x55] = 7;
+  file[at + 0x57] = 5;
+  file[at + 0x11D] = 0xCC;
+  file[base + 0x23A58] = 1;
+  file[base + 0x23B9D] = 4;
+  file.set([31, 9, 1, 2, 0, 0, 0], at + 0x38);
+  file.set([45, 38, 1, 0, 0], at + 0x48);
+  const save = openSave(file);
+  assert(save.setPalico(0, 4, {
+    name: '苍蓝猫', greeting: '开工了！', target: 3, exp: 100, colors: { coat: '#4d8bf0' },
+    equippedMoves: [31, 2], equippedSkills: [1],
+  }, catalog));
+  const cat = save.playerStatus(0).companions[0];
+  assert.equal(cat.name, '苍蓝猫');
+  assert.deepEqual(cat.equippedMoves, [31, 2]);
+  assert.deepEqual(cat.equippedSkills, [1]);
+  assert.equal(cat.colors.coat, '#4d8bf0');
+  const out = Buffer.from(save.export());
+  assert.equal(out[at + 0x11D], 0xCC);
+  assert(out.subarray(0, at).equals(file.subarray(0, at)));
+  assert(out.subarray(at + 324).equals(file.subarray(at + 324)));
+  assert.throws(() => save.setPalico(0, 4, { equippedSkills: [2] }, catalog), /已学/);
+  assert(Buffer.from(save.export()).equals(out));
+});
+
+test('可选活跃存档只读验证道具表、当前装备与艾露猫', { skip: !process.env.MHXX_ACTIVE_SAVE }, () => {
+  const file = readFileSync(process.env.MHXX_ACTIVE_SAVE);
+  const save = openSave(file);
+  const slot = save.slots().findIndex(Boolean);
+  assert(slot >= 0);
+  const occupied = Array.from({ length: 2300 }, (_, index) => save.item(slot, index)).filter(record => record.id);
+  assert(occupied.length > 0);
+  assert.equal(occupied.filter(record => catalog.items[record.id]).length, occupied.length);
+  const status = save.playerStatus(slot);
+  assert(status.equipment.some(gear => gear && catalog.gear[gear.type]?.[gear.id]));
+  assert(status.companions.some(Boolean));
+  assert(Buffer.from(save.export()).equals(file));
 });
 
 test('可选公开模板实际读写验证', { skip: !process.env.MHXX_SAVE_FIXTURES }, () => {

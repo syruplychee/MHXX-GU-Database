@@ -1,11 +1,25 @@
 'use strict';
 
 const saveEditorState = {
-  source: null, fileName: '', slot: 0, tab: 'character', dirty: false,
+  source: null, fileName: '', slot: 0, tab: 'status', dirty: false,
   item: 0, itemPage: 0, itemFilter: '', itemMode: 'filled',
+  gearBox: 'hunter', gearIndex: null, catIndex: null,
   group: 0, automatic: false, phrase: 0, targetFormat: '', conversion: null,
 };
-const saveItemCatalogs = new Map();
+let saveCatalogRequest;
+
+function loadSaveCatalog() {
+  if (!saveCatalogRequest) {
+    saveCatalogRequest = fetch('/save-catalog.json?v=1').then(response => {
+      if (!response.ok) throw new Error(`存档资料加载失败（HTTP ${response.status}）。`);
+      return response.json();
+    }).catch(error => {
+      saveCatalogRequest = null;
+      throw error;
+    });
+  }
+  return saveCatalogRequest;
+}
 
 function saveFormatLabel(save) {
   const suffix = !save.bodyOffset && save.format === 'switch-gu' ? ' · 裸正文' : '';
@@ -69,7 +83,8 @@ function saveEditorPage() {
     $('#saveSourceName', root).textContent = state.fileName;
     $('#saveSourceInfo', root).textContent = `${saveFormatLabel(source)} · ${num(source.layout.size)} 字节`;
     const slots = source.slots();
-    const tabs = [['character', '角色'], ['items', '道具箱'], ['shoutouts', '快捷喊话'], ['convert', '跨版本转换']];
+    const tabs = [['status', '人物状态'], ['character', '角色编辑'], ['items', '道具箱'], ['gear', '装备箱'],
+      ['charms', '护石'], ['palico', '艾露猫'], ['shoutouts', '快捷喊话'], ['convert', '跨版本转换']];
     area.innerHTML = `<section class="save-panel save-toolbar">
       <div class="save-slots" aria-label="角色槽">${slots.map((slot, i) => `<button type="button" class="save-slot" data-save-slot="${i}"
         aria-pressed="${state.slot === i && !!slot}" ${slot ? '' : 'disabled'}><span>槽 ${i + 1}</span><b>${slot ? esc(slot.name || '未命名角色') : '空槽'}</b></button>`).join('')}</div>
@@ -86,8 +101,11 @@ function saveEditorPage() {
       renderSaveItems(content, state, changed);
     } else if (state.tab === 'shoutouts') {
       renderSaveShoutouts(content, state, changed);
-    } else {
+    } else if (state.tab === 'character') {
       renderSaveCharacter(content, state, changed);
+    } else {
+      const pages = { status: renderSaveStatus, gear: renderSaveEquipment, charms: renderSaveEquipment, palico: renderSavePalico };
+      renderSaveCatalogPage(content, state, changed, pages[state.tab]);
     }
   }
 
@@ -102,8 +120,9 @@ function saveEditorPage() {
       const save = await readLocalSystem(file);
       if (!root.isConnected) return;
       Object.assign(state, {
-        source: save, fileName: file.name, slot: Math.max(0, save.slots().findIndex(Boolean)), tab: 'character',
+        source: save, fileName: file.name, slot: Math.max(0, save.slots().findIndex(Boolean)), tab: 'status',
         dirty: false, item: 0, itemPage: 0, itemFilter: '', itemMode: 'filled',
+        gearBox: 'hunter', gearIndex: null, catIndex: null,
         group: 0, automatic: false, phrase: 0, targetFormat: '', conversion: null,
       });
       render();
@@ -120,9 +139,16 @@ function saveEditorPage() {
     if (!button) return;
     if ('saveSlot' in button.dataset) {
       state.slot = Number(button.dataset.saveSlot);
+      state.gearIndex = null;
+      state.catIndex = null;
       render();
     } else if (button.dataset.saveTab) {
       state.tab = button.dataset.saveTab;
+      if (button.dataset.statusCat !== undefined) state.catIndex = Number(button.dataset.statusCat);
+      if (button.dataset.statusHunter !== undefined) {
+        state.gearBox = 'hunter';
+        state.gearIndex = null;
+      }
       render();
     } else if (button.dataset.saveExport) {
       downloadSaveFile(state.source, button.dataset.saveExport);
@@ -169,25 +195,16 @@ function renderSaveCharacter(host, state, changed) {
   });
 }
 
-async function fetchSaveItemCatalog() {
-  const language = S.lang;
-  if (!saveItemCatalogs.has(language)) {
-    const request = api('/save-items').then(({ rows }) => new Map(rows.map(row => [row.id, row])))
-      .catch(error => {
-        saveItemCatalogs.delete(language);
-        throw error;
-      });
-    saveItemCatalogs.set(language, request);
-  }
-  return saveItemCatalogs.get(language);
-}
-
 async function renderSaveItems(host, state, changed) {
   host.innerHTML = '<p class="save-panel">正在读取道具图鉴…</p>';
   let catalog;
   let catalogError = '';
   try {
-    catalog = await fetchSaveItemCatalog();
+    const { items } = await loadSaveCatalog();
+    catalog = new Map(Object.entries(items).map(([key, [name, dummy]]) => {
+      const id = Number(key);
+      return [id, { id, name, dummy }];
+    }));
   } catch {
     catalog = new Map();
     catalogError = '道具图鉴读取失败。仍可清空格子或修改已有道具数量。';
@@ -196,7 +213,7 @@ async function renderSaveItems(host, state, changed) {
   const source = state.source;
   const slot = state.slot;
   const count = SaveEditorCore.itemCount;
-  const nameOf = id => id === 0 ? '空格' : catalog.get(id)?.name ?? '未收录道具';
+  const nameOf = id => id === 0 ? '空格' : catalog.get(id)?.name ?? (catalogError ? '道具名未加载' : '未收录道具');
   const allowed = id => !catalog.get(id)?.dummy && (source.format !== 'switch-gu' || !SaveEditorCore.xxOnlyItems.has(id));
   host.innerHTML = `<div class="save-item-columns">
     <section class="save-panel save-section">

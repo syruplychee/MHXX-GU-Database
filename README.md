@@ -37,7 +37,7 @@ node server/server.js        # 或双击 start.cmd
 | 随从 | 武器、防具三栏图鉴；随从队伍按地区、等级、来源图标和道具查询全部 1,396 条奖励 |
 | 地图与交换 | 27 张原版区域图、按区域和等级筛选采集点、540 条山菜爷交换记录 |
 | 配装器 | 支持按目标技能自动搜索和手动配装；可录入护石、设置武器孔位、收藏和重命名配装 |
-| 存档编辑器 | 在浏览器内编辑 Switch GU、Switch XX 和 3DS XX 的角色、道具箱与喊话，支持三版互转 |
+| 存档编辑器 | Switch GU、Switch XX 和 3DS XX 的人物状态、角色资料、道具、装备、护石与艾露猫编辑，支持三版互转 |
 | 全局搜索 | 道具/武器/防具/怪物/任务/技能 六类聚合搜索 |
 | 多语言 | 9 种语言的数据名切换（EN/简中/繁中/日/韩/德/法/意/西），与桌面版一致；界面保持中文 |
 
@@ -60,9 +60,15 @@ node server/server.js        # 或双击 start.cmd
 
 ## 存档编辑器
 
-从侧边栏进入「工具 → 存档编辑器」，选择导出的 `system` 或 `system_backup`。支持 Switch GU 的带头和裸正文表示、日版 Switch XX 的带头文件，以及日版 3DS XX 的 ExtData 导出。裸 XX 正文按 3DS 格式处理。存档内容只在当前浏览器会话处理，道具名称从本地 Dex API 查询。
+从侧边栏进入「工具 → 存档编辑器」，选择导出的 `system` 或 `system_backup`。支持 Switch GU 的带头和裸正文表示、日版 Switch XX 的带头文件，以及日版 3DS XX 的 ExtData 导出。裸 XX 正文按 3DS 格式处理。存档内容只在当前浏览器会话处理。存档道具名称和编辑规则由页面自带的简体中文静态资料表提供。
 
-选中角色槽，即可编辑姓名、金币、游玩时间、HR 点数、龙历院和村点数、道具箱单格及三组手动和自动喊话。选档 HR 用于查看。应用修改后，下载 `system`，也可下载与目标版本对应的 `system_backup`。
+打开存档后默认显示「人物状态」，可查看角色资料、猎人或猫猎人模式、当前穿戴、技能点、狩技和随行编组。装备基础防御来自装备表，强化后的最终防御由游戏计算。
+
+- **角色编辑、道具箱和快捷喊话**支持基础资料、单格道具及三组手动和自动喊话。选档 HR 用于查看。
+- **装备箱与护石**支持添加、替换、清空空闲格、编辑武器强化、装饰珠和同部位幻化。穿戴或预设仍引用的装备可编辑同一件，替换或清空前先在游戏里解除引用。护石按品级校验两个技能、点数、孔位和装饰珠。
+- **艾露猫**支持编辑已雇用随从的姓名、问候语、等级、经验、目标偏好、外观、已学及装备的行动和技能。已学项沿用原有位置类型，倾向和固有能力用于查看。
+
+应用修改后，下载 `system`，也可下载与目标版本对应的 `system_backup`。
 
 ### 跨版本转换
 
@@ -72,7 +78,9 @@ node server/server.js        # 或双击 start.cmd
 
 输出沿用目标的容器、共享设置和配信数据，角色槽使用源档的编号和占用状态。转换为 XX 时，过长的 GU 喊话会按 UTF-8 字符边界截短。转换到 GU 时，已知的日版限定穿戴和幻化会在页面列出，先在源游戏换掉再转换。箱内的已知日版限定物品仍会保留并提示，显示效果取决于目标游戏。
 
-`npm test` 会检查三版的识别和小范围补丁、六个互转方向、喊话截断与主备头。把 `MHXX_SAVE_FIXTURES` 设为公开转换器仓库的路径，还可运行样本回归。两个 XX 的活跃存档仍需分别回灌验证。 [本地格式研究](../saveEditor/save-format-notes/README.md) · [公开模板](https://github.com/Alexander-Lancellott/MHGU-MHXX-Save-Converter-Script/tree/2af44c3a59f4df8e2989228e7369339b552a346d) · [日版限定内容对照](https://silverjolteon.github.io/MHGU/save-manager/scripts/DUMMY.js)
+`npm test` 检查三版识别、六个互转方向、字段写入和引用边界。可设置 `MHXX_SAVE_FIXTURES` 指向公开模板仓库，以及 `MHXX_ACTIVE_SAVE` 指向有已穿戴装备和随行艾露猫的活跃样本，执行只读回归。两个 XX 的活跃存档仍需分别回灌验证。 [本地格式研究](../saveEditor/save-format-notes/README.md) · [公开模板](https://github.com/Alexander-Lancellott/MHGU-MHXX-Save-Converter-Script/tree/2af44c3a59f4df8e2989228e7369339b552a346d) · [日版限定内容对照](https://silverjolteon.github.io/MHGU/save-manager/scripts/DUMMY.js)
+
+存档资料表由 `uv run --no-project python tools/build-save-catalog.py` 生成。输入来自相邻参考项目的已审阅存档 ID、孔位、护石生成和随从能力表。生成过程读取资料表。 [mhgu-xx-se 数据来源](../saveEditor/mhgu-xx-se/data/README.md) · [MHGU-Save-editor 随从能力表](../saveEditor/MHGU-Save-editor/data/palico-actions.csv)
 
 ---
 
@@ -105,7 +113,6 @@ webapp/
 | GET | `/api/meta` | 计数、语言、武器类型、部位、任务等级/类型（按语言） |
 | GET | `/api/items?q&rarity&page` | 道具分页列表 |
 | GET | `/api/items/:id` | 道具详情 + 全部获取途径 |
-| GET | `/api/save-items` | 以存档原生 ID 为键的道具名列表 |
 | GET | `/api/weapons?q&type&rarity&sort&page&recipe` | 武器列表，`recipe=production` 筛选可生产武器，`recipe=upgrade` 筛选可强化获得的武器 |
 | GET | `/api/weapons/tree?type=` | 某类武器的完整派生树（嵌套结构） |
 | GET | `/api/weapons/:id` | 武器详情（锋利度解码、素材、弹药、旋律、派生关系） |
