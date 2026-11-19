@@ -353,7 +353,7 @@ function forgePreview(detail, mode) {
   const recipes = groups.filter(([kind, , price]) => price > 0 || detail.materials.some((item) => item.kind === kind));
   return `<h3 class="forge-weapon-name">${esc(w.name)}</h3>
     <div class="forge-art${art === fallback ? ' forge-art-fallback' : ''}">
-      <img src="/icons/${encodeURIComponent(art)}" alt="${esc(w.name)}" onerror="this.onerror=null;this.src='/icons/${fallback}';this.parentElement.classList.add('forge-art-fallback')">
+      <img src="${iconUrl(art)}" alt="${esc(w.name)}" onerror="this.onerror=null;this.src='${iconUrl(fallback)}';this.parentElement.classList.add('forge-art-fallback')">
     </div>
     ${recipes.map(([kind, label, price]) => {
       const items = detail.materials.filter((item) => item.kind === kind);

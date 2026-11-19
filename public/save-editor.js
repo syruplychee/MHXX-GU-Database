@@ -10,7 +10,7 @@ let saveCatalogRequest;
 
 function loadSaveCatalog() {
   if (!saveCatalogRequest) {
-    saveCatalogRequest = fetch('/save-catalog.json?v=2').then(response => {
+    saveCatalogRequest = fetch('save-catalog.json?v=2').then(response => {
       if (!response.ok) throw new Error(`存档资料加载失败（HTTP ${response.status}）。`);
       return response.json();
     }).catch(error => {

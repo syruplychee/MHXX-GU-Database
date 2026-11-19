@@ -209,7 +209,7 @@ function monsterParts(d, form) {
   const sourceLink = (id) => `<a class="monster-source-link" href="${MONSTER_REFERENCE}${id}.html" target="_blank" rel="noopener">MHGU 资料页 ↗</a>`;
   const forms = isAhtal ? `<div class="monster-buttons monster-forms" role="group" aria-label="阁螳螂形态">${monsterButtons([['', '本体'], ['mech', '机甲']], 'form-pick', form)}${sourceLink(mech ? 3002 : 2992)}</div>` : '';
   const columns = [['切', 'cut', '切断'], ['打', 'impact', '打击'], ['弹', 'shot', '射击'], ['火', 'fir'], ['水', 'wtr'], ['雷', 'thd'], ['冰', 'ice'], ['龙', 'drg'], ['晕', 'diz', '眩晕']];
-  const artUrl = m.diagram && !mech ? `/icons/${encodeURIComponent(m.diagram)}?v=original` : '';
+  const artUrl = m.diagram && !mech ? `${iconUrl(m.diagram)}?v=original` : '';
   const diagram = artUrl ? `<figure class="monster-diagram"><a href="${artUrl}" target="_blank" rel="noopener" aria-label="查看${esc(m.name)}原版肉质示意图"><img src="${artUrl}" class="monster-part-image" alt="" decoding="async"></a><figcaption>按编号对照肉质表 · <a href="${artUrl}" target="_blank" rel="noopener">查看大图 ↗</a></figcaption></figure>`
     : mech ? '<p class="monster-empty">两套资料均未收录机甲的编号示意图，部位肉质见下表。</p>'
       : m.kind === 'large' ? `<p class="monster-empty">桌面版未收录这只怪物的部位示意图。${MONSTER_REFERENCE_PAGES[m.id] ? ' ' + sourceLink(MONSTER_REFERENCE_PAGES[m.id]) : ''}</p>` : '';

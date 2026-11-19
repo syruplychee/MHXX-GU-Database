@@ -90,7 +90,7 @@ async function locationGuidePage({ parts, params, token }) {
     syncMaps();
     const map = result.data;
     $('#mapName').textContent = map.name;
-    const image = `/icons/${map.image}`;
+    const image = iconUrl(map.image);
     const areas = guideOptions(result.rows, 'areaId', 'area');
     art.innerHTML = `<figure><a href="${image}" target="_blank" rel="noopener"><img src="${image}" alt="${esc(map.name)}区域示意图"></a>${map.id !== map.mapId ? '<figcaption>日夜变体共用地图和采集记录。</figcaption>' : ''}</figure>
       ${areas.length ? `<div class="map-areas" role="group" aria-label="采集区域"><button type="button" data-map-area="" aria-pressed="true">全部区域</button>${areas.map(([id, name]) => `<button type="button" data-map-area="${id}" aria-pressed="false">${esc(name)}</button>`).join('')}</div>` : ''}`;

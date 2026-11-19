@@ -22,8 +22,14 @@ const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 const RARITY = ['#8a8f98', '#a9b2bf', '#79b06a', '#4f9dd9', '#a97fd4', '#d98a4f', '#d9584f', '#e0b34f', '#7fd9d9', '#d97fc2', '#f0d68a'];
 const rarity = (r) => `<span class="rarity" style="background:${RARITY[r] || RARITY[0]}">${r ?? '—'}</span>`;
 
+function iconUrl(name) {
+  const files = globalThis.mhxxPages?.iconFiles;
+  const file = files ? (Object.hasOwn(files, name) ? files[name] : 'blank16.png') : name;
+  return `icons/${encodeURIComponent(file)}`;
+}
+
 const ic = (name, cls = 'img16') =>
-  `<img class="${cls}" src="/icons/${encodeURIComponent(name)}" loading="lazy" alt="" onerror="this.style.visibility='hidden'">`;
+  `<img class="${cls}" src="${iconUrl(name)}" loading="lazy" alt="" onerror="this.style.visibility='hidden'">`;
 const itemIcon = (id) => ic('Itm_' + String(id).padStart(4, '0'));
 const monIcon = (id) => ic('Mon_S_' + String(id).padStart(3, '0'));
 const monBig = (id) => ic('Mon_B_' + String(id).padStart(3, '0'), 'img-art pixel');
@@ -79,17 +85,22 @@ const S = {
 async function api(path, params = {}) {
   const q = new URLSearchParams({ lang: S.lang });
   for (const [k, v] of Object.entries(params)) if (v !== undefined && v !== null && v !== '') q.set(k, v);
-  const res = await fetch('/api' + path + '?' + q.toString());
-  const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(data.error || res.statusText);
-  return data;
+  return requestApi('GET', path + '?' + q.toString());
 }
 
-async function apiPost(path, body) {
-  const res = await fetch('/api' + path, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ ...body, lang: S.lang }),
+async function apiPost(path, body, signal) {
+  return requestApi('POST', path, { ...body, lang: S.lang }, signal);
+}
+
+async function requestApi(method, path, body, signal) {
+  const url = '/api' + path;
+  if (globalThis.mhxxPages) return globalThis.mhxxPages.request(method, url, body, signal);
+
+  const res = await fetch(url, {
+    method,
+    signal,
+    headers: body === undefined ? undefined : { 'Content-Type': 'application/json' },
+    body: body === undefined ? undefined : JSON.stringify(body),
   });
   const data = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(data.error || res.statusText);
@@ -740,14 +751,15 @@ async function weaponPage({ token }, id) {
   const d = await api(`/weapons/${id}`);
   if (token !== routeToken) return;
   const w = d.data;
-  const img = w.ImgFile ? `/icons/${encodeURIComponent(w.ImgFile)}` : '';
+  const img = w.ImgFile ? iconUrl(w.ImgFile) : '';
+  const fallback = iconUrl(w.Wpn_Type_ID ? 'Wpn_' + String(w.Wpn_Type_ID).padStart(2, '0') + '01' : 'blank16');
   const params = weaponSpecificStats(w);
 
   view.innerHTML = `
     ${crumbs([['#/weapons', '武器'], ['#/weapons?type=' + w.Wpn_Type_ID, weaponTypeName(w.Wpn_Type_ID)], [null, w.name]])}
     <div class="detail-hero">
       <div class="detail-art">
-        <div class="art-box ${img ? '' : 'noart'}">${img ? `<img class="pixel" src="${img}" alt="" onerror="this.parentNode.classList.add('noart');this.src='/icons/${w.Wpn_Type_ID ? 'Wpn_' + String(w.Wpn_Type_ID).padStart(2, '0') + '01' : 'blank16'}'">` : typeIcon(w.Wpn_Type_ID)}</div>
+        <div class="art-box ${img ? '' : 'noart'}">${img ? `<img class="pixel" src="${img}" alt="" onerror="this.parentNode.classList.add('noart');this.src='${fallback}'">` : typeIcon(w.Wpn_Type_ID)}</div>
       </div>
       <div class="detail-info">
         <div class="eyebrow">#${w.Wpn_ID} · ${esc(weaponTypeName(w.Wpn_Type_ID))}</div>
@@ -1249,7 +1261,8 @@ async function boot() {
   try {
     S.meta = await api('/meta');
   } catch (err) {
-    view.innerHTML = `<div class="error">无法连接数据服务：${esc(err.message)}<br/>请先运行 <code>node server/server.js</code></div>`;
+    const hint = globalThis.mhxxPages ? '请刷新页面重试。' : '请先运行 <code>node server/server.js</code>';
+    view.innerHTML = `<div class="error">无法载入资料：${esc(err.message)}<br/>${hint}</div>`;
     return;
   }
   initShell();

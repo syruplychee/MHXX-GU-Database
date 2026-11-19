@@ -289,11 +289,8 @@ function loadoutSearchPage(host, levels, treeNames, charms, favorites, token) {
     run.disabled = true; stop.hidden = false;
     status.textContent = '正在搜索满足目标技能的组合…'; rows.innerHTML = '';
     try {
-      const response = await fetch('/api/set/search', { method: 'POST', signal: controller.signal,
-        headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...state, lang: S.lang, charms, excludedArmor,
-          charmId: state.charmId === 'any' ? null : state.charmId === 'none' ? '' : state.charmId }) });
-      const result = await response.json();
-      if (!response.ok) throw new Error(result.error || response.statusText);
+      const result = await apiPost('/set/search', { ...state, charms, excludedArmor,
+        charmId: state.charmId === 'any' ? null : state.charmId === 'none' ? '' : state.charmId }, controller.signal);
       if (token !== routeToken) return;
       lastLoadoutSearch = { ...result, lang: S.lang };
       renderResults(result);
