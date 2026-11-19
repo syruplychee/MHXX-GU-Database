@@ -1,9 +1,7 @@
-# MHXX Dex Web
+# MHXX资料库
 
-把《MHXX Dex》桌面程序（`MHXX Dex.exe` + 加密 SQLite 库）反编译、解密后重建的网页资料库。
+《怪物猎人 XX》的网页资料库，提供装备、怪物和任务查询，以及配装和存档工具。
 **零运行时依赖**：只用 Node.js 24 内置的 `node:sqlite` 与 `node:http`，前端是原生 JavaScript + CSS，无需 npm install，也不需要构建步骤。
-
-![首页](docs/home.png)
 
 ---
 
@@ -36,7 +34,7 @@ node server/server.js        # 或双击 start.cmd
 | 调和 / 笛旋律 / 猎虫 / 地图采集 / 勋章 / 斗技大会 / 猫猎人 | 原始数据表重建 |
 | 随从 | 武器、防具三栏图鉴；随从队伍按地区、等级、来源图标和道具查询全部 1,396 条奖励 |
 | 地图与交换 | 27 张原版区域图、按区域和等级筛选采集点、540 条山菜爷交换记录 |
-| 配装器 | 支持按目标技能自动搜索和手动配装；可录入护石、设置武器孔位、收藏和重命名配装 |
+| 配装器 | 支持按目标技能自动搜索和手动配装；手动选择防具时可按稀有度、孔位和技能筛选；可录入护石、设置武器孔位、收藏和重命名配装 |
 | 存档编辑器 | Switch GU、Switch XX 和 3DS XX 的人物、装备、艾露猫与配信任务编辑，支持三版存档互转 |
 | 全局搜索 | 道具/武器/防具/怪物/任务/技能 六类聚合搜索 |
 | 多语言 | 9 种语言的数据名切换（EN/简中/繁中/日/韩/德/法/意/西），与桌面版一致；界面保持中文 |
@@ -51,9 +49,9 @@ node server/server.js        # 或双击 start.cmd
 
 ## 技术栈
 
-- **后端**：Node.js 24 + `node:sqlite`（只读打开解密库）+ `node:http`，单文件 `server/server.js`
+- **后端**：Node.js 24 + `node:sqlite`（只读访问）+ `node:http`，单文件 `server/server.js`
 - **前端**：原生 JS（hash 路由 + 模板字符串渲染）、原生 CSS（暗色 MH 风格、响应式）
-- **数据**：`data/mhxx_dex.sqlite`（由 `Decompiled/database/mhxx_dex_decrypted.sqlite` 复制）
+- **数据**：`data/mhxx_dex.sqlite`
 - **图片**：从原程序集资源中导出的 8,085 张图标/装备图，置于 `public/icons/`
 
 没有框架、没有打包器、没有第三方依赖，便于修改和长期维护。
@@ -97,7 +95,7 @@ webapp/
 │  ├─ style.css          主题与布局
 │  └─ icons/             8,085 张图片（<name>.png / <name>.jpg）
 ├─ data/
-│  └─ mhxx_dex.sqlite    解密后的数据库（84 张表，13.7 MB）
+│  └─ mhxx_dex.sqlite    游戏资料数据库（84 张表，13.7 MB）
 ├─ docs/                 截图
 ├─ start.cmd             一键启动（Windows）
 └─ package.json          scripts.start
@@ -209,4 +207,4 @@ function build() {
 ## 数据与版权
 
 数据、名称、图标版权归《怪物猎人 XX》及原工具作者（Ping / pingtendo）所有；
-本项目仅作为反编译学习与个人查阅使用，请勿用于商业用途或再分发数据副本。
+本项目仅供学习与个人查阅，请勿用于商业用途或再分发数据副本。

@@ -1,8 +1,8 @@
 {
-  "name": "mhxx-dex-web",
+  "name": "mhxx-library",
   "version": "1.0.0",
   "private": true,
-  "description": "MHXX Dex rebuilt as a zero-dependency web database",
+  "description": "MHXX资料库",
   "main": "server/server.js",
   "scripts": {
     "start": "node server/server.js",

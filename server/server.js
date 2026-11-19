@@ -144,7 +144,7 @@ const wpnName = (lang) => L('n.Wpn_Name', lang);
 function meta() {
   const one = (sql) => db.prepare(sql).get().n;
   return {
-    app: 'MHXX Dex Web',
+    app: 'MHXX资料库',
     langs: LANGS,
     weaponTypes: WEAPON_TYPES,
     armorParts: ARMOR_PARTS,
@@ -1795,5 +1795,5 @@ const server = http.createServer(async (req, res) => {
 });
 
 server.listen(PORT, '127.0.0.1', () => {
-  console.log(`MHXX Dex Web running at http://127.0.0.1:${PORT}`);
+  console.log(`MHXX资料库 http://127.0.0.1:${PORT}`);
 });

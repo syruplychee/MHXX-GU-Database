@@ -132,6 +132,7 @@ async function route() {
   const token = ++routeToken;
   const { parts, params } = parseHash();
   if ($('#skillPreview').open) $('#skillPreview').close();
+  if ($('#modal').open) closeModal();
   navActive(parts);
   $('#sidebar').classList.remove('open');
   window.scrollTo({ top: 0 });
@@ -287,9 +288,8 @@ async function homePage({ token }) {
   view.innerHTML = `
     <section class="hero">
       <div class="hero-main">
-        <div class="eyebrow">Monster Hunter XX · Database</div>
-        <h1>MHXX <em>Dex</em></h1>
-        <p>从《MHXX Dex》桌面程序反编译并解密数据库重建的网页资料库：道具、武器、防具、技能、怪物、任务、配装模拟，全部来自原始游戏数据。</p>
+        <h1>MHXX<em>资料库</em></h1>
+        <p>查装备、技能、怪物和任务，搭配防具、装饰品与护石。</p>
         <div class="hero-tags">
           ${chip(`道具 ${num(c.items)}`, 'gold')} ${chip(`武器 ${num(c.weapons)}`, 'gold')} ${chip(`防具 ${num(c.armor)}`, 'gold')}
           ${chip(`任务 ${num(c.quests)}`)} ${chip(`怪物 ${num(c.monsters)}`)} ${chip(`技能 ${num(c.skills)}`)}
@@ -1092,43 +1092,54 @@ async function renderSlots(token) {
   };
 }
 
-function openArmorPicker(partKey, token) {
+async function openArmorPicker(partKey, token) {
   const part = partKey === 'head' ? 1 : partKey === 'body' ? 2 : partKey === 'arms' ? 3 : partKey === 'waist' ? 4 : 5;
-  armorOptions(part).then((rows) => {
-    openModal(`选择防具 · ${SLOT_KEYS.find((s) => s[0] === partKey)[1]}`, rows, (q) =>
-      rows.filter((r) => !q || r.name.toLowerCase().includes(q.toLowerCase())).map((r) => ({
-        id: r.id,
-        html: `<div><div class="pr-name">${esc(r.name)}</div><div class="pr-sub">${esc((r.skills || []).map((s) => s.n + (s.p > 0 ? '+' : '') + s.p).join(' / ') || '无技能')}</div></div>`,
-        meta: `防御 ${r.def} · 孔 ${r.slot} · R${r.rare}`,
-      })),
-      (row) => {
-        S.set.parts[partKey] = { amrId: row.id, jewels: [] };
-        saveSet();
-        closeModal();
-        renderSlots(token).then(() => computeSet(token));
-      }
-    );
+  const rows = await armorOptions(part);
+  if (token !== routeToken) return;
+  const rarities = [...new Set(rows.map((row) => row.rare))].sort((a, b) => a - b);
+  const skills = [...new Map(rows.flatMap((row) => row.skills.filter((s) => s.p > 0).map((s) => [s.t, s.n])))]
+    .sort((a, b) => a[1].localeCompare(b[1]));
+
+  openModal(`选择防具 · ${SLOT_KEYS.find((s) => s[0] === partKey)[1]}`, rows, {
+    filters: [
+      modalFilter('rarity', '稀有度', '全部稀有度', rarities.map((rare) => [rare, `R${rare}`])),
+      modalFilter('slots', '孔位', '全部孔位', [0, 1, 2, 3].map((slots) => [slots, `${slots} 孔`])),
+      modalFilter('skill', '提供技能点', '全部技能', skills),
+    ].join(''),
+    matches: (r, { rarity, slots, skill }) =>
+      (rarity === '' || r.rare === Number(rarity)) &&
+      (slots === '' || r.slot === Number(slots)) &&
+      (skill === '' || r.skills.some((s) => s.t === Number(skill) && s.p > 0)),
+    format: (r) => ({
+      html: `<span class="pr-name">${esc(r.name)}</span><span class="pr-sub">${esc(r.skills.map((s) => s.n + (s.p > 0 ? '+' : '') + s.p).join(' / ') || '无技能')}</span>`,
+      meta: `防御 ${r.def} · 孔 ${r.slot} · R${r.rare}`,
+    }),
+    onPick: (row) => {
+      S.set.parts[partKey] = { amrId: row.id, jewels: [] };
+      saveSet();
+      closeModal();
+      renderSlots(token).then(() => computeSet(token));
+    },
   });
 }
 
-function openJewelPicker(partKey, token) {
-  jewelOptions().then((rows) => {
-    openModal('选择装饰品', rows, (q) =>
-      rows.filter((r) => !q || r.name.toLowerCase().includes(q.toLowerCase())).map((r) => ({
-        id: r.id,
-        html: `<div><div class="pr-name">${esc(r.name)} <span class="dim">${'◉'.repeat(r.slot)}</span></div><div class="pr-sub">${esc([r.t1name ? r.t1name + ' ' + (r.p1 > 0 ? '+' : '') + r.p1 : '', r.t2name ? r.t2name + ' ' + r.p2 : ''].filter(Boolean).join(' / '))}</div></div>`,
-        meta: `${num(r.price)}z`,
-      })),
-      (row) => {
-        const sel = S.set.parts[partKey] || {};
-        sel.jewels = sel.jewels || [];
-        sel.jewels.push(row.id);
-        S.set.parts[partKey] = sel;
-        saveSet();
-        closeModal();
-        renderSlots(token).then(() => computeSet(token));
-      }
-    );
+async function openJewelPicker(partKey, token) {
+  const rows = await jewelOptions();
+  if (token !== routeToken) return;
+  openModal('选择装饰品', rows, {
+    format: (r) => ({
+      html: `<span class="pr-name">${esc(r.name)} <span class="dim">${'◉'.repeat(r.slot)}</span></span><span class="pr-sub">${esc([r.t1name ? r.t1name + ' ' + (r.p1 > 0 ? '+' : '') + r.p1 : '', r.t2name ? r.t2name + ' ' + r.p2 : ''].filter(Boolean).join(' / '))}</span>`,
+      meta: `${num(r.price)}z`,
+    }),
+    onPick: (row) => {
+      const sel = S.set.parts[partKey] || {};
+      sel.jewels = sel.jewels || [];
+      sel.jewels.push(row.id);
+      S.set.parts[partKey] = sel;
+      saveSet();
+      closeModal();
+      renderSlots(token).then(() => computeSet(token));
+    },
   });
 }
 
@@ -1174,51 +1185,62 @@ async function computeSet(token) {
 
 /* ============================================================ modal */
 
-let modalState = null;
+function modalFilter(name, label, all, options) {
+  return `<label>${label}<select name="${name}"><option value="">${all}</option>${options.map(([id, text]) => `<option value="${id}">${esc(text)}</option>`).join('')}</select></label>`;
+}
 
-function openModal(title, rows, mapFn, onPick) {
-  modalState = { mapFn, onPick };
+function openModal(title, rows, { filters = '', matches = () => true, format, onPick }) {
   const modal = $('#modal');
-  modal.hidden = false;
   modal.innerHTML = `
     <div class="modal-card">
-      <div class="modal-head">
-        <h3>${esc(title)}</h3>
-        <input id="modalSearch" placeholder="搜索名称…" />
-        <button class="btn sm ghost" id="modalClose">关闭</button>
-      </div>
+      <form id="modalFilters">
+        <div class="modal-head">
+          <h3 id="modalTitle">${esc(title)}</h3>
+          <input name="q" type="search" aria-label="搜索名称" placeholder="搜索名称…" autocomplete="off" autofocus />
+          <button type="button" class="btn sm ghost" id="modalClose">关闭</button>
+        </div>
+        ${filters ? `<div class="modal-filters">${filters}<button type="button" class="btn sm ghost" id="modalReset">重置筛选</button></div>` : ''}
+      </form>
       <div class="modal-body" id="modalBody"></div>
-      <div class="modal-foot"><span id="modalCount"></span><span>点击条目选择</span></div>
+      <div class="modal-foot"><span id="modalCount" role="status"></span><span>点击条目选择</span></div>
     </div>`;
-  const body = $('#modalBody');
-  const render = (q) => {
-    const items = mapFn(q);
-    $('#modalCount').textContent = `${items.length} 条`;
-    body.innerHTML = items.slice(0, 400).map((it) => `<div class="pick-row" data-id="${it.id}">
-      <div>${it.html}</div><div class="pr-meta">${it.meta || ''}</div></div>`).join('') || '<div class="empty">没有结果</div>';
+  const form = $('#modalFilters', modal);
+  const body = $('#modalBody', modal);
+  const count = $('#modalCount', modal);
+  const entries = rows.map((row) => ({ row, name: row.name.normalize('NFKC').toLowerCase(), ...format(row) }));
+  const byId = new Map(rows.map((row) => [String(row.id), row]));
+  function render() {
+    const { q, ...criteria } = Object.fromEntries(new FormData(form));
+    const term = q.trim().normalize('NFKC').toLowerCase();
+    const items = entries.filter(({ row, name }) => name.includes(term) && matches(row, criteria));
+    count.textContent = `${num(items.length)} 条`;
+    body.innerHTML = items.map(({ row, html, meta }) => `<button type="button" class="pick-row" data-id="${row.id}">
+      <span>${html}</span><span class="pr-meta">${meta}</span></button>`).join('') || '<div class="empty">没有符合条件的装备</div>';
+    body.scrollTop = 0;
+  }
+  form.addEventListener('submit', (event) => event.preventDefault());
+  form.addEventListener('input', render);
+  modal.onclick = (event) => {
+    if (event.target === modal || event.target.closest('#modalClose')) return closeModal();
+    if (event.target.closest('#modalReset')) {
+      form.reset();
+      render();
+      return;
+    }
+    const choice = event.target.closest('.pick-row');
+    if (choice) onPick(byId.get(choice.dataset.id));
   };
-  render('');
-  $('#modalSearch').addEventListener('input', (e) => render(e.target.value.trim()));
-  setTimeout(() => $('#modalSearch').focus(), 30);
+  modal.oncancel = (event) => { event.preventDefault(); closeModal(); };
+  render();
+  modal.showModal();
 }
 
 function closeModal() {
-  modalState = null;
   const modal = $('#modal');
-  modal.hidden = true;
+  modal.close();
   modal.innerHTML = '';
-}
-
-function initModal() {
-  $('#modal').addEventListener('click', (e) => {
-    if (!modalState) return;
-    if (e.target.id === 'modal' || e.target.closest('#modalClose')) return closeModal();
-    const row = e.target.closest('.pick-row');
-    if (!row) return;
-    const input = $('#modalSearch');
-    const item = modalState.mapFn(input ? input.value.trim() : '').find((x) => String(x.id) === row.dataset.id);
-    if (item) modalState.onPick(item);
-  });
+  modal.onclick = null;
+  modal.oncancel = null;
 }
 
 /* ============================================================ boot */
@@ -1231,7 +1253,6 @@ async function boot() {
     return;
   }
   initShell();
-  initModal();
   initSkillPreview();
   window.addEventListener('hashchange', route);
   if (!location.hash) location.hash = '#/';
