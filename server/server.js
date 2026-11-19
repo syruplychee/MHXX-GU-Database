@@ -498,14 +498,23 @@ function weaponDetail(req, res, id) {
     )
     .all(id);
 
+  const isBowgun = base.Wpn_Type_ID === 12 || base.Wpn_Type_ID === 13;
   const ammo = db
     .prepare(
-      `SELECT g.Itm_ID id, n.${L('Itm_Name', lang)} name, g.LoadQty qty, g.Max max, g.SpFireQty sp,
-              g.RapidFireGap_ID gap
+      `SELECT g.Itm_ID id, n.${L('Itm_Name', lang)} name, g.LoadQty qty, g.LoadQtyP unlockQty, g.Max max, g.SpFireQty sp,
+              g.RapidFireGap_ID gap, r.${L('Wpn_RapidFireGap', lang)} gapName
        FROM DB_Wpn_Gun g JOIN ID_Itm_Name n ON n.Itm_ID = g.Itm_ID
-       WHERE g.Wpn_ID = ? AND g.LoadQty > 0 ORDER BY g.ID`
+       LEFT JOIN ID_Wpn_RapidFireGap r ON r.Wpn_RapidFireGap_ID = g.RapidFireGap_ID
+       WHERE g.Wpn_ID = ? AND (g.LoadQty > 0 OR (? AND g.LoadQtyP > 0)) ORDER BY g.ID`
     )
-    .all(id);
+    .all(id, Number(isBowgun))
+    .map((row) => {
+      if (!isBowgun) return row;
+      const name = (lang === 1 || lang === 2) && [2896, 2902].includes(row.id) ? row.name.replace(/^LV1/, 'LV2') : row.name;
+      // Built-in shots occupy a separate item ID range. Max is also used for ordinary ammo.
+      return { ...row, name, internal: row.id >= 2881 && row.id <= 2921,
+        fireMode: row.sp > 0 ? (base.Wpn_Type_ID === 12 ? 'rapid' : 'crouch') : null };
+    });
 
   const songs = db
     .prepare(

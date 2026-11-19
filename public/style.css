@@ -296,6 +296,22 @@ table.grid tbody tr:last-child td { border-bottom: 0; }
 .sharp-gauge > span { display: block; margin-bottom: 3px; color: var(--muted); font-size: 11px; }
 .sharp { display: flex; height: 14px; border-radius: 4px; overflow: hidden; background: #0a0c11; border: 1px solid var(--line); }
 .sharp .seg { height: 100%; }
+.bowgun-ammo { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr)); align-items: start; gap: 7px; }
+.bowgun-ammo-group { min-width: 0; overflow: hidden; border: 1px solid var(--line-2); border-radius: 6px; background: var(--panel); }
+.bowgun-ammo-group h4 { margin: 0; padding: 5px 7px; color: var(--gold-2); border-bottom: 1px solid var(--line-2); font-size: 12px; background: var(--panel-2); }
+.bowgun-ammo-group h4 small { color: var(--muted); font-weight: 400; }
+.bowgun-ammo-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: baseline; gap: 2px 5px; padding: 4px 6px; border-bottom: 1px solid var(--line); }
+.bowgun-ammo-row:last-child { border-bottom: 0; }
+.bowgun-ammo-row:hover { background: var(--panel-3); }
+.bowgun-ammo-name { min-width: 0; display: flex; align-items: center; gap: 4px; font-size: 12px; overflow-wrap: anywhere; }
+.bowgun-ammo-name img { flex: 0 0 16px; }
+.bowgun-ammo-qty, .bowgun-badge { font-size: 10.5px; color: var(--muted); }
+.bowgun-ammo-qty { text-align: right; white-space: nowrap; }
+.bowgun-ammo-badges { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 3px; padding-left: 20px; }
+.bowgun-badge { padding: 0 4px; border-radius: 4px; background: #2c313b; }
+.bowgun-rapid { color: #ffd39a; background: #473829; }
+.bowgun-crouch { color: #b8d8ff; background: #253d52; }
+.bowgun-internal { color: #afe4d0; background: #253c39; }
 
 .res-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; }
 .res { text-align: center; border: 1px solid var(--line); border-radius: 9px; padding: 8px 4px; background: rgba(255,255,255,.02); }

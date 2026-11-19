@@ -299,6 +299,10 @@
 .forge-sharpness { display: block; }
 .forge-sharpness dd { margin-top: 6px; text-align: left; }
 .forge-sharpness .sharp { height: 11px; }
+.forge-ammo-jump { width: 100%; display: flex; justify-content: space-between; gap: 5px; padding: 5px 7px; margin: 0 0 4px; border: 1px solid #4b6861; border-radius: 6px; background: #263b3a; color: var(--forge-accent); font-size: 12px; cursor: pointer; }
+.forge-ammo-jump:hover { border-color: var(--forge-accent); }
+.forge-ammo { margin-top: 10px; }
+.forge-ammo > h3 { margin: 0 0 5px; color: var(--forge-accent); font-size: 13px; }
 
 @media (max-width: 1190px) {
   .forge-grid { grid-template-columns: minmax(0, 1fr) minmax(230px, 32%); grid-template-areas: 'map preview' 'map stats'; grid-template-rows: minmax(0, 3fr) minmax(0, 2fr); }
@@ -315,4 +319,5 @@
   #forgePreviewTitle { scroll-margin-top: 78px; }
   .forge-art { height: 174px; }
   .forge-content { flex: none; }
+  .forge-ammo { scroll-margin-top: 78px; }
 }

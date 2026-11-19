@@ -773,6 +773,23 @@ function weaponSpecificStats(w) {
   ].filter(([, value]) => value && !['---', '0', -1].includes(value));
 }
 
+function bowgunAmmoHTML(rows, showCapacity = false) {
+  const groups = [
+    ['常规弹', rows.filter((a) => !a.internal && a.qty > 0)],
+    ['内藏弹', rows.filter((a) => a.internal)],
+    ['技能追加弹种', rows.filter((a) => !a.internal && a.qty <= 0)],
+  ];
+  return `<div class="bowgun-ammo">${groups.filter(([, ammo]) => ammo.length).map(([label, ammo]) => `<section class="bowgun-ammo-group">
+    <h4>${label} <small>${ammo.length}</small></h4>${ammo.map((a) => {
+      const speed = a.fireMode === 'rapid' ? `<span class="bowgun-badge bowgun-rapid">速射 ×${a.sp}${a.gap > 0 ? ` · 间隔${esc(a.gapName)}` : ''}</span>`
+        : a.fireMode === 'crouch' ? `<span class="bowgun-badge bowgun-crouch">蹲射 ${a.sp} 发</span>` : '';
+      const badges = `${speed}${a.internal ? `<span class="bowgun-badge bowgun-internal">内藏弹 · 总数 ${a.max}</span>` : ''}${a.qty <= 0 ? '<span class="bowgun-badge">需弹种追加</span>' : ''}`;
+      return `<a class="bowgun-ammo-row" href="#/items/${a.id}"><span class="bowgun-ammo-name">${itemIcon(a.id)}<b>${esc(a.name)}</b></span>
+        <span class="bowgun-ammo-qty">装填 ${a.qty || a.unlockQty}${showCapacity && !a.internal ? ` · 携带上限 ${a.max}` : ''}</span>
+        ${badges ? `<span class="bowgun-ammo-badges">${badges}</span>` : ''}</a>`;
+    }).join('')}</section>`).join('')}</div>`;
+}
+
 async function weaponPage({ token }, id) {
   view.innerHTML = `<div class="loading">加载中…</div>`;
   const d = await api(`/weapons/${id}`);
@@ -813,7 +830,8 @@ async function weaponPage({ token }, id) {
       <td><div class="cell-name">${itemIcon(m.id)}<span class="nm">${esc(m.name)}</span></div></td>
       <td class="num">${num(m.qty)}</td></tr>`)), d.materials.length) : ''}
 
-    ${d.ammo.length ? section('可装填弹药', simpleTable(['弹药', '装填数', '最大', '特殊射击'], d.ammo.map((a) => `<tr class="clickable" data-href="#/items/${a.id}">
+    ${d.ammo.length && (w.Wpn_Type_ID === 12 || w.Wpn_Type_ID === 13) ? section('可发射弹种', bowgunAmmoHTML(d.ammo, true), d.ammo.length)
+      : d.ammo.length ? section('可装填弹药', simpleTable(['弹药', '装填数', '最大', '特殊射击'], d.ammo.map((a) => `<tr class="clickable" data-href="#/items/${a.id}">
       <td><div class="cell-name">${itemIcon(a.id)}<span class="nm">${esc(a.name)}</span></div></td>
       <td class="num">${num(a.qty)}</td><td class="num">${num(a.max)}</td><td class="num">${num(a.sp)}</td></tr>`)), d.ammo.length) : ''}
 

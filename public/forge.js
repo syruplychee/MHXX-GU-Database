@@ -124,7 +124,7 @@ async function weaponForgePage({ params, token }) {
       const detail = await api('/weapons/' + state.weapon);
       if (token !== routeToken || request !== detailRequest) return;
       preview.innerHTML = forgePreview(detail, mode);
-      stats.innerHTML = forgeStats(detail.data);
+      stats.innerHTML = forgeStats(detail);
     } catch (err) {
       if (token === routeToken && request === detailRequest) {
         preview.innerHTML = `<p class="forge-message" role="alert">武器详情加载失败：${esc(err.message)}</p>`;
@@ -141,6 +141,13 @@ async function weaponForgePage({ params, token }) {
     selectWeapon(link, { scroll: isTree, save: true });
   });
   reveal.addEventListener('click', () => $('#forgePreviewTitle').scrollIntoView({ block: 'start' }));
+  stats.addEventListener('click', (event) => {
+    if (!event.target.closest('[data-forge-ammo]')) return;
+    const ammo = $('.forge-ammo', stats);
+    if (stats.scrollHeight > stats.clientHeight) stats.scrollTop += ammo.getBoundingClientRect().top - stats.getBoundingClientRect().top - 4;
+    else ammo.scrollIntoView({ block: 'start' });
+    ammo.focus({ preventScroll: true });
+  });
 
   if (isTree) {
     const data = await api('/weapons/tree', { type });
@@ -359,10 +366,13 @@ function forgePreview(detail, mode) {
     <a class="forge-detail-link" href="#/weapons/${w.Wpn_ID}">完整武器详情 <span aria-hidden="true">↗</span></a>`;
 }
 
-function forgeStats(w) {
+function forgeStats(detail) {
+  const w = detail.data;
+  const ammo = w.Wpn_Type_ID === 12 || w.Wpn_Type_ID === 13 ? detail.ammo : [];
   const elements = [elementChip(w.el1name, w.SpAtk1_Pt), elementChip(w.el2name, w.SpAtk2_Pt)].filter(Boolean).join(' ');
   const row = (name, value, cls = '') => `<div class="forge-stat ${cls}"><dt>${name}</dt><dd>${value}</dd></div>`;
-  return `<dl class="forge-stat-sheet">
+  return `${ammo.length ? `<button type="button" class="forge-ammo-jump" data-forge-ammo>可发射弹种 <b>${ammo.length} 种 ↓</b></button>` : ''}
+  <dl class="forge-stat-sheet">
     ${row('稀有度', `<b style="color:${RARITY[w.Rare] || RARITY[0]}">RARE ${w.Rare}</b>`)}
     ${row('攻击力', `<strong>${num(w.Atk)}</strong>`, 'forge-attack')}
     ${row('会心率', `${w.Affinity || 0}%`)}
@@ -371,5 +381,6 @@ function forgeStats(w) {
     ${row('孔位', `<span class="forge-slots" aria-label="${w.Slot || 0} 个孔位">${'●'.repeat(w.Slot || 0)}${'○'.repeat(3 - (w.Slot || 0))}</span>`)}
     ${w.sharpness.length ? row('锋利度', sharpnessBars(w), 'forge-sharpness') : ''}
     ${weaponSpecificStats(w).map(([name, value]) => row(name, esc(value))).join('')}
-  </dl>`;
+  </dl>
+  ${ammo.length ? `<section class="forge-ammo" tabindex="-1"><h3>可发射弹种</h3>${bowgunAmmoHTML(ammo)}</section>` : ''}`;
 }
