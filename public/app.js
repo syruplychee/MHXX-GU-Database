@@ -119,7 +119,7 @@ function setRoute(path, params = {}) {
 
 function navActive(parts) {
   let active = 'home';
-  if (parts[0] === 'palico') active = 'palico';
+  if (parts[0] === 'palico') active = `palico-${parts[1] || 'team'}`;
   else if (parts[0]) active = parts[0];
   $$('#nav a').forEach((a) => a.classList.toggle('active', a.dataset.route === active));
 }
@@ -161,11 +161,10 @@ async function route() {
       case 'horns': return go(hornsPage);
       case 'kinsects': return go(kinsectsPage);
       case 'palico':
-        if (parts[1] === 'weapons') return parts[2] ? go((c) => palicoWeaponPage(c, +parts[2])) : go(palicoWeaponsPage);
-        if (parts[1] === 'armor') return parts[2] ? go((c) => palicoArmorDetailPage(c, +parts[2])) : go(palicoArmorListPage);
-        return go(palicoTeamPage);
+        if (parts[1] === 'weapons' || parts[1] === 'armor') return go(palicoGearPage);
+        return go(teamGuidePage);
       case 'arena': return parts[1] ? go((c) => arenaPage(c, +parts[1])) : go(arenaListPage);
-      case 'locations': return parts[1] ? go((c) => locationPage(c, +parts[1])) : go(locationsPage);
+      case 'locations': return go(locationGuidePage);
       case 'awards': return go(awardsPage);
       case 'hfh': return go(hfhPage);
       case 'set': return go(setPage);
@@ -317,7 +316,7 @@ async function homePage({ token }) {
         ['#/monsters', '☠', '怪物', '弱点 / 素材 / 任务'],
         ['#/quests', '⚑', '任务', '报酬与目标'],
         ['#/combos', '⇄', '调和', '配方与成功率'],
-        ['#/locations', '▦', '地图采集', '区域与采集点'],
+        ['#/locations', '▦', '地图与交换', '区域采集与山菜爷'],
         ['#/arena', '⚖', '斗技大会', '限定装备'],
       ].map(([href, ico, name, desc]) => `<a class="card" href="${href}"><span class="c-ico">${ico}</span><span><b>${name}</b><small>${desc}</small></span></a>`).join('')}
     </div>
@@ -585,54 +584,6 @@ function kinsectsPage({ params, token }) {
   });
 }
 
-function palicoWeaponsPage({ params, token }) {
-  return listPage({
-    params, token, eyebrow: 'Palico Equipment', title: '随从武器', sub: '随从猫武器 · 近战 / 远程攻击',
-    filters: [filterSearch(params), filterSelect('type', '类型', [[1, '斩击'], [2, '打击'], [3, '回旋镖']], params)],
-    fetch: (p) => api('/palico/weapons', { q: p.q, type: p.type, page: p.page }),
-    href: (r) => `#/palico/weapons/${r.id}`,
-    columns: [
-      { label: '随从武器', render: (r) => `<div class="cell-name">${ic(r.img || 'PeliWpnImg_001')}<span><span class="nm">${esc(r.name)}</span><span class="sub">${esc(r.typeName || '')}</span></span></div>` },
-      { label: '近战', cls: 'num', render: (r) => num(r.atkD) },
-      { label: '远程', cls: 'num', render: (r) => num(r.atkI) },
-      { label: '会心', cls: 'num', render: (r) => `${r.affinityD ?? 0}/${r.affinityI ?? 0}` },
-      { label: '防御', cls: 'num', render: (r) => num(r.def) },
-      { label: '稀有', cls: 'num', render: (r) => rarity(r.rare) },
-    ],
-  });
-}
-
-function palicoArmorListPage({ params, token }) {
-  return listPage({
-    params, token, eyebrow: 'Palico Equipment', title: '随从防具', sub: '随从猫防具 · 防御与耐性',
-    filters: [filterSearch(params), filterSelect('part', '部位', [[11, '头部'], [12, '身体']], params)],
-    fetch: (p) => api('/palico/armor', { q: p.q, part: p.part, page: p.page }),
-    href: (r) => `#/palico/armor/${r.id}`,
-    columns: [
-      { label: '随从防具', render: (r) => `<div class="cell-name">${ic(r.img || 'PeliAmrImg_001')}<span class="nm">${esc(r.name)}</span></div>` },
-      { label: '部位', render: (r) => tag(r.part === 11 ? '头部' : r.part === 12 ? '身体' : r.part) },
-      { label: '防御', cls: 'num', render: (r) => num(r.def) },
-      { label: '火水雷冰龙', cls: 'num', render: (r) => `<span class="mono">${[r.fir, r.wtr, r.thd, r.ice, r.drg].map((v) => `<span class="${v > 0 ? 'pos' : v < 0 ? 'neg' : 'dim'}">${v}</span>`).join(' ')}</span>` },
-      { label: '价格', cls: 'num', render: (r) => num(r.price) },
-      { label: '稀有', cls: 'num', render: (r) => rarity(r.rare) },
-    ],
-  });
-}
-
-async function palicoTeamPage({ token }) {
-  const data = await api('/palico/team');
-  if (token !== routeToken) return;
-  view.innerHTML = `${headHTML('Palico Team', '随从队伍', '随从猫队任务的报酬与出现地点')}
-    <div class="table-wrap"><table class="grid"><thead><tr><th>队伍</th><th>道具</th><th>等级</th><th>区域</th><th class="num">数量</th><th class="num">概率</th></tr></thead><tbody>
-    ${data.rows.map((r) => `<tr class="clickable" data-href="#/items/${r.itmId}">
-      <td class="mono">#${String(r.id).padStart(3, '0')}</td>
-      <td><div class="cell-name">${itemIcon(r.itmId)}<span class="nm">${esc(r.item)}</span></div></td>
-      <td>${esc(r.rank || '—')}</td>
-      <td>${esc(r.zone || '—')}</td>
-      <td class="num">${num(r.qty)}</td><td class="num">${pct(r.pct)}</td></tr>`).join('')}
-    </tbody></table></div>`;
-}
-
 async function arenaListPage({ token }) {
   const data = await api('/arena');
   if (token !== routeToken) return;
@@ -643,15 +594,6 @@ async function arenaListPage({ token }) {
       <td>${esc(r.loc || '—')}</td><td class="num">${num(r.reward)}</td><td class="num">${r.player}</td>
       <td class="mono dim">${esc(r.timeS)} / ${esc(r.timeA)} / ${esc(r.timeB)}</td></tr>`).join('')}
     </tbody></table></div>`;
-}
-
-async function locationsPage({ token }) {
-  const data = await api('/locations');
-  if (token !== routeToken) return;
-  view.innerHTML = `${headHTML('Locations', '地图采集', '采集 / 钓鱼 / 采矿 / 捕虫 点位一览')}
-    <div class="cards">
-      ${data.rows.map((r) => `<a class="card" href="#/locations/${r.id}"><span class="c-ico">▦</span><span><b>${esc(r.name)}</b><small>${r.items} 条采集记录</small></span></a>`).join('')}
-    </div>`;
 }
 
 async function awardsPage({ token }) {
@@ -948,51 +890,7 @@ async function jewelPage({ token }, id) {
   `;
 }
 
-/* ============================================================ palico details */
-
-async function palicoWeaponPage({ token }, id) {
-  view.innerHTML = `<div class="loading">加载中…</div>`;
-  const d = await api(`/palico/weapons/${id}`);
-  if (token !== routeToken) return;
-  const w = d.data;
-  view.innerHTML = `
-    ${crumbs([['#/palico/weapons', '随从武器'], [null, w.name]])}
-    <div class="detail-hero">
-      <div class="detail-art"><div class="art-box">${ic(w.ImgFile || 'PeliWpnImg_001', 'img-art')}</div></div>
-      <div class="detail-info">
-        <div class="eyebrow">Palico Weapon #${w.PeliWpn_ID}</div>
-        <h1>${esc(w.name)}</h1>
-        <div class="tags">${rarity(w.Rare)} ${tag(w.typeName || '')} ${chip('近战 ' + w.AtkD)} ${chip('远程 ' + w.AtkI)}</div>
-        <div class="stat-grid">${statBox('近战攻击', w.AtkD, 'gold')}${statBox('远程攻击', w.AtkI)}${statBox('防御', w.Def)}${statBox('价格', num(w.Price) + 'z')}</div>
-      </div>
-    </div>
-    ${d.materials.length ? section('生产素材', simpleTable(['素材', '数量'], d.materials.map((m) => `<tr class="clickable" data-href="#/items/${m.id}">
-      <td><div class="cell-name">${itemIcon(m.id)}<span class="nm">${esc(m.name)}</span></div></td><td class="num">${num(m.qty)}</td></tr>`)), d.materials.length) : ''}
-  `;
-}
-
-async function palicoArmorDetailPage({ token }, id) {
-  view.innerHTML = `<div class="loading">加载中…</div>`;
-  const d = await api(`/palico/armor/${id}`);
-  if (token !== routeToken) return;
-  const a = d.data;
-  view.innerHTML = `
-    ${crumbs([['#/palico/armor', '随从防具'], [null, a.name]])}
-    <div class="detail-hero">
-      <div class="detail-art"><div class="art-box">${ic(a.ImgFile || 'PeliAmrImg_001', 'img-art')}</div></div>
-      <div class="detail-info">
-        <div class="eyebrow">Palico Armor #${a.PeliAmr_ID}</div>
-        <h1>${esc(a.name)}</h1>
-        <div class="tags">${rarity(a.Rare)} ${tag(a.Part === 11 ? '头部' : '身体')} ${chip('防御 ' + a.Def)}</div>
-        <div style="margin-top:12px">${resGrid(a)}</div>
-      </div>
-    </div>
-    ${d.materials.length ? section('生产素材', simpleTable(['素材', '数量'], d.materials.map((m) => `<tr class="clickable" data-href="#/items/${m.id}">
-      <td><div class="cell-name">${itemIcon(m.id)}<span class="nm">${esc(m.name)}</span></div></td><td class="num">${num(m.qty)}</td></tr>`)), d.materials.length) : ''}
-  `;
-}
-
-/* ============================================================ arena / locations */
+/* ============================================================ arena detail */
 
 async function arenaPage({ token }, id) {
   view.innerHTML = `<div class="loading">加载中…</div>`;
@@ -1016,24 +914,6 @@ async function arenaPage({ token }, id) {
       <span class="c-ico">⛨</span><span><b>${esc(x.name)}</b><small>${esc(armorPartName(x.part))}</small></span></a>`).join('')}</div>`) : ''}
     ${d.items.length ? section('支给品', simpleTable(['道具', '数量', '概率'], d.items.map((r) => `<tr class="clickable" data-href="#/items/${r.id}">
       <td><div class="cell-name">${itemIcon(r.id)}<span class="nm">${esc(r.name)}</span></div></td><td class="num">${num(r.qty)}</td><td class="num">${pct(r.pct)}</td></tr>`)), d.items.length) : ''}
-  `;
-}
-
-async function locationPage({ token }, id) {
-  view.innerHTML = `<div class="loading">加载中…</div>`;
-  const d = await api(`/locations/${id}`);
-  if (token !== routeToken) return;
-  const groups = {};
-  for (const r of d.rows) {
-    const key = (r.area || '—') + ' · ' + (r.how || '') + (r.rank ? ' · ' + r.rank : '');
-    (groups[key] = groups[key] || []).push(r);
-  }
-  view.innerHTML = `
-    ${crumbs([['#/locations', '地图'], [null, d.data.name]])}
-    <div class="page-head"><div><div class="eyebrow">Location #${d.data.id}</div><h1>${esc(d.data.name)}</h1>
-      <div class="sub">${d.rows.length} 条采集记录</div></div></div>
-    ${Object.keys(groups).map((g) => section(g, simpleTable(['道具'], groups[g].map((r) => `<tr class="clickable" data-href="#/items/${r.id}">
-      <td><div class="cell-name">${itemIcon(r.id)}<span class="nm">${esc(r.name)}</span></div></td></tr>`)), groups[g].length)).join('')}
   `;
 }
 

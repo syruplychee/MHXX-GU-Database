@@ -34,7 +34,8 @@ node server/server.js        # 或双击 start.cmd
 | 怪物 | 93 只大型、36 只小型；分栏查看部位示意图、肉质、状态和陷阱、任务及掉率；阁螳螂支持单独查看本体和机甲 |
 | 任务 | 1,307 个；左侧搜索和组合筛选，右侧查看目标、报酬、怪物、前置、受注和解锁资料 |
 | 调和 / 笛旋律 / 猎虫 / 地图采集 / 勋章 / 斗技大会 / 猫猎人 | 原始数据表重建 |
-| 随从 | 随从武器、随从防具、随从队伍 |
+| 随从 | 武器、防具三栏图鉴；随从队伍按地区、等级、来源图标和道具查询全部 1,396 条奖励 |
+| 地图与交换 | 27 张原版区域图、按区域和等级筛选采集点、540 条山菜爷交换记录 |
 | 配装器 | 5 部位 + 护石 + 装饰品；实时计算防御、最大防御、五属性耐性、孔位占用与技能等级 |
 | 全局搜索 | 道具/武器/防具/怪物/任务/技能 六类聚合搜索 |
 | 多语言 | 9 种语言的数据名切换（EN/简中/繁中/日/韩/德/法/意/西），与桌面版一致；界面保持中文 |
@@ -96,6 +97,7 @@ webapp/
 | GET | `/api/skills?q&page`、`/api/skills/:id` | 技能树与等级 |
 | GET | `/api/jewels?q&slot&page`、`/api/jewels/:id` | 装饰品 |
 | GET | `/api/quests?q&group&lv&type&key&supplement&page`、`/api/quests/:id` | 任务、报酬和解锁资料 |
+| GET | `/api/locations/:id`、`/api/locations/trades` | 地图采集与山菜爷交换 |
 | GET | `/api/monsters?q&kind&page`、`/api/monsters/:id` | 分类、原版部位图、肉质、耐性、陷阱和各等级掉率 |
 | GET | `/api/combos`、`/api/horns`、`/api/kinsects`、`/api/palico/*`、`/api/arena`、`/api/locations`、`/api/awards`、`/api/hfh` | 其余数据表 |
 | GET | `/api/search?q` | 六类聚合搜索 |

@@ -105,10 +105,10 @@ function json(res, code, body) {
   res.end(data);
 }
 
-function paged(req, res, { countSql, countParams, listSql, listParams, map, focusPage }) {
+function paged(req, res, { countSql, countParams, listSql, listParams, map, focusPage, maxSize = 200 }) {
   const url = new URL(req.url, 'http://x');
   const page = Math.max(1, int(url.searchParams.get('page'), focusPage || 1));
-  const size = Math.min(200, Math.max(1, int(url.searchParams.get('size'), 40)));
+  const size = Math.min(maxSize, Math.max(1, int(url.searchParams.get('size'), 40)));
   const total = db.prepare(countSql).get(...countParams).n;
   const rows = db.prepare(listSql).all(...listParams, size, (page - 1) * size).map(map || ((r) => r));
   json(res, 200, { total, page, size, pages: Math.max(1, Math.ceil(total / size)), rows });
@@ -1183,6 +1183,7 @@ function listPalicoWeapons(req, res) {
   }
   const w = where.join(' AND ');
   paged(req, res, {
+    maxSize: 2000,
     countSql: `SELECT COUNT(*) n FROM DB_PeliWpn p JOIN ID_PeliWpn_Name n ON n.PeliWpn_ID = p.PeliWpn_ID WHERE ${w}`,
     countParams: params,
     listSql: `SELECT p.PeliWpn_ID id, n.${nc} name, p.Part part, p.Rare rare, p.PeliWpn_Type_ID type,
@@ -1200,9 +1201,10 @@ function palicoWeaponDetail(req, res, id) {
   const lang = clampLang(new URL(req.url, 'http://x').searchParams.get('lang'));
   const base = db
     .prepare(
-      `SELECT p.*, n.${L('PeliWpn_Name', lang)} name, t.${L('PeliWpn_Type', lang)} typeName
+      `SELECT p.*, n.${L('PeliWpn_Name', lang)} name, t.${L('PeliWpn_Type', lang)} typeName, e.${L('Wpn_SpAtk', lang)} element
        FROM DB_PeliWpn p JOIN ID_PeliWpn_Name n ON n.PeliWpn_ID = p.PeliWpn_ID
        LEFT JOIN ID_PeliWpn_Type t ON t.PeliWpn_Type_ID = p.PeliWpn_Type_ID
+       LEFT JOIN ID_Wpn_SpAtk e ON e.Wpn_SpAtk_ID = p.SpAtk_ID
        WHERE p.PeliWpn_ID = ?`
     )
     .get(id);
@@ -1234,6 +1236,7 @@ function listPalicoArmor(req, res) {
   }
   const w = where.join(' AND ');
   paged(req, res, {
+    maxSize: 2000,
     countSql: `SELECT COUNT(*) n FROM DB_PeliAmr a JOIN ID_PeliAmr_Name n ON n.PeliAmr_ID = a.PeliAmr_ID WHERE ${w}`,
     countParams: params,
     listSql: `SELECT a.PeliAmr_ID id, n.${nc} name, a.Part part, a.Rare rare, a.Def def,
@@ -1267,14 +1270,15 @@ function palicoTeam(req, res) {
   const lang = clampLang(new URL(req.url, 'http://x').searchParams.get('lang'));
   const rows = db
     .prepare(
-      `SELECT x.PeliTeam_ID id, x.Icon icon, x.Qty qty, x.Pct pct,
+      `SELECT x.PeliTeam_ID id, x.Icon icon, x.Qty qty, x.Pct pct, x.Rank_ID rankId, x.Zone_ID zoneId,
               i.Itm_ID itmId, i.${L('Itm_Name', lang)} item,
-              r.${L('Rank', lang)} rank, z.${L('PeliTeam_Zone', lang)} zone
+              r.${L('Rank', lang)} rank, z.${L('PeliTeam_Zone', lang)} zone, m.${L('Mon_Name', lang)} monster
        FROM DB_ItmtoPeliTeam x
        JOIN ID_Itm_Name i ON i.Itm_ID = x.Itm_ID
        LEFT JOIN ID_Rank r ON r.Rank_ID = x.Rank_ID
        LEFT JOIN ID_PeliTeam_Zone z ON z.PeliTeam_Zone_ID = x.Zone_ID
-       ORDER BY x.PeliTeam_ID LIMIT 400`
+       LEFT JOIN ID_Mon_Name m ON m.Mon_ID = x.Icon AND x.Icon BETWEEN 1 AND 129
+       ORDER BY x.PeliTeam_ID`
     )
     .all();
   json(res, 200, { rows });
@@ -1342,35 +1346,51 @@ function arenaDetail(req, res, id) {
 
 // ---------------------------------------------------------------- locations
 
+const locationMapId = (id) => id >= 28 && id <= 35 ? Math.floor((id - 28) / 2) + 1 : id;
+
 function listLocations(req, res) {
   const lang = clampLang(new URL(req.url, 'http://x').searchParams.get('lang'));
   const rows = db
     .prepare(
       `SELECT l.Loc_ID id, l.${L('Loc_Name', lang)} name,
-              (SELECT COUNT(*) FROM DB_ItmtoLoc x WHERE x.Loc_ID = l.Loc_ID) items
+              (SELECT COUNT(*) FROM DB_ItmtoLoc x WHERE x.Loc_ID = l.Loc_ID) items,
+              (SELECT COUNT(*) FROM DB_ItmtoVet x WHERE x.Loc_ID = l.Loc_ID) trades
        FROM ID_Loc_Name l WHERE l.Loc_ID > 0 ORDER BY l.Loc_ID`
     )
     .all();
-  json(res, 200, { total: rows.length, rows });
+  json(res, 200, { total: rows.length, rows: rows.map((row) => ({ ...row, mapId: locationMapId(row.id) })) });
 }
 
 function locationDetail(req, res, id) {
   const lang = clampLang(new URL(req.url, 'http://x').searchParams.get('lang'));
   const base = db.prepare(`SELECT Loc_ID id, ${L('Loc_Name', lang)} name FROM ID_Loc_Name WHERE Loc_ID = ?`).get(id);
   if (!base) return json(res, 404, { error: 'not found' });
+  const mapId = locationMapId(id);
   const rows = db
     .prepare(
       `SELECT x.Itm_ID id, n.${L('Itm_Name', lang)} name, a.${L('Loc_Ara', lang)} area,
+              x.Loc_Ara_ID areaId, x.Loc_GetType_ID methodId, x.Rank_ID rankId,
               g.${L('Loc_GetType', lang)} how, r.${L('Rank', lang)} rank
        FROM DB_ItmtoLoc x
        JOIN ID_Itm_Name n ON n.Itm_ID = x.Itm_ID
        LEFT JOIN ID_Loc_Ara a ON a.Loc_Ara_ID = x.Loc_Ara_ID
        LEFT JOIN ID_Loc_GetType g ON g.Loc_GetType_ID = x.Loc_GetType_ID
        LEFT JOIN ID_Rank r ON r.Rank_ID = x.Rank_ID
-       WHERE x.Loc_ID = ? ORDER BY x.Loc_Ara_ID, x.Loc_GetType_ID, x.Rank_ID, x.ID LIMIT 600`
+       WHERE x.Loc_ID = ? ORDER BY x.Loc_Ara_ID, x.Loc_GetType_ID, x.Rank_ID, x.ID`
     )
-    .all(id);
-  json(res, 200, { data: base, rows });
+    .all(mapId);
+  json(res, 200, { data: { ...base, mapId, image: `Loc_${String(mapId).padStart(2, '0')}` }, rows });
+}
+
+function veggieTrades(req, res) {
+  const lang = clampLang(new URL(req.url, 'http://x').searchParams.get('lang'));
+  const rows = db.prepare(
+    `SELECT x.Vet_ID id, x.Loc_ID locId, l.${L('Loc_Name', lang)} loc,
+            x.ItmOut_ID giveId, o.${L('Itm_Name', lang)} give, x.ItmIn_ID getId, i.${L('Itm_Name', lang)} receive, x.Pct pct
+     FROM DB_ItmtoVet x JOIN ID_Itm_Name o ON o.Itm_ID = x.ItmOut_ID
+     JOIN ID_Itm_Name i ON i.Itm_ID = x.ItmIn_ID LEFT JOIN ID_Loc_Name l ON l.Loc_ID = x.Loc_ID ORDER BY x.Vet_ID`
+  ).all();
+  json(res, 200, { total: rows.length, rows });
 }
 
 // ---------------------------------------------------------------- awards
@@ -1679,6 +1699,7 @@ const routes = [
   [/^\/api\/arena$/, listArena],
   [/^\/api\/arena\/(\d+)$/, (req, res, m) => arenaDetail(req, res, int(m[1]))],
   [/^\/api\/locations$/, listLocations],
+  [/^\/api\/locations\/trades$/, veggieTrades],
   [/^\/api\/locations\/(\d+)$/, (req, res, m) => locationDetail(req, res, int(m[1]))],
   [/^\/api\/awards$/, listAwards],
   [/^\/api\/hfh$/, listHfh],
